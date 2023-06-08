@@ -1,0 +1,24 @@
+[package]
+name = "cashu-lnurl"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.71"
+axum = "0.6.18"
+cashu-crab = { git = "https://github.com/thesimplekid/cashu-crab" }
+config = { version = "0.12", features = ["toml"] }
+dirs = "5.0.1"
+lazy_static = "1.4.0"
+log = "0.4.18"
+nostr-sdk = { git = "https://github.com/rust-nostr/nostr", rev="eced782", default-features = false, features=["nip04", "nip19"]}
+redb = "0.20.0"
+serde = "1.0.163"
+serde_json = "1.0.96"
+tokio = "1.28.2"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
+tungstenite = { version = "0.19.0", features = ["rustls-tls-webpki-roots"]}
+url = "2.4.0"
