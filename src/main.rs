@@ -78,7 +78,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/lnurlp/:username/invoice", get(get_user_invoice))
         .with_state(state);
 
-    let listen_addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081);
+    let address = settings.network.address;
+    let ip = Ipv4Addr::from_str(&address)?;
+
+    let port = settings.network.port;
+
+    let listen_addr = SocketAddr::new(std::net::IpAddr::V4(ip), port);
 
     axum::Server::bind(&listen_addr)
         .serve(lnurl_service.into_make_service())

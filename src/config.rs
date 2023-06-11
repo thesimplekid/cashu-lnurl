@@ -42,8 +42,15 @@ pub struct Info {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Network {
+    pub port: u16,
+    pub address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Settings {
     pub info: Info,
+    pub network: Network,
 }
 
 impl Settings {

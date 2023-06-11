@@ -7,3 +7,10 @@ mint = "https://8333.space:3338"
 relays=["wss://relay.damus.io", "wss://nostr.oxtr.dev"]
 # Optional Invoice Description
 # invoice_description=""
+
+[network]
+# Bind to this network address
+address = "0.0.0.0"
+
+# Listen on this port
+port = 8080
