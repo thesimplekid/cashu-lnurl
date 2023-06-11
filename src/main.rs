@@ -48,7 +48,13 @@ async fn main() -> anyhow::Result<()> {
     let data = data_dir.join("cashu-lnurl");
 
     let db = Db::new(data).await?;
-    let nostr = Nostr::new(db.clone(), &nostr_pubkey, relays).await?;
+    let nostr = Nostr::new(
+        db.clone(),
+        api_base_address.to_string(),
+        &nostr_pubkey,
+        relays,
+    )
+    .await?;
     let cashu = Cashu::new(db.clone(), nostr.clone());
 
     let mut nostr_clone = nostr.clone();
@@ -72,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/lnurlp/:username/invoice", get(get_user_invoice))
         .with_state(state);
 
-    let listen_addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+    let listen_addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081);
 
     axum::Server::bind(&listen_addr)
         .serve(lnurl_service.into_make_service())

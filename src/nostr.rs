@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
@@ -11,10 +12,13 @@ use tungstenite::Message as WsMessage;
 use crate::database::Db;
 use crate::types::{User, UserSignUp};
 
+const SIGNUP_KIND: u64 = 20420;
+
 #[derive(Clone, Debug)]
 pub struct Nostr {
     db: Db,
     keys: Keys,
+    domain: String,
     client: Arc<Mutex<Option<Client>>>,
     relays: HashSet<String>,
 }
@@ -31,7 +35,7 @@ impl Nostr {
             None => Keys::generate(),
         };
 
-        debug!("{:?}", keys.public_key().to_string());
+        debug!("Public key {:?}", keys.public_key().to_string());
 
         Ok(keys)
     }
@@ -39,6 +43,7 @@ impl Nostr {
     /// Init Nostr Client
     pub async fn new(
         db: Db,
+        domain: String,
         private_key: &Option<String>,
         relays: HashSet<String>,
     ) -> Result<Self> {
@@ -47,21 +52,35 @@ impl Nostr {
         let client = Client::new(&keys);
         let nostr_relays = relays.iter().map(|url| (url, None)).collect();
         client.add_relays(nostr_relays).await?;
-        client.connect().await;
-
-        let subscription = Filter::new()
-            .pubkey(keys.public_key())
-            .kind(Kind::EncryptedDirectMessage)
-            .since(Timestamp::now());
-
-        client.subscribe(vec![subscription]).await;
 
         Ok(Self {
             db,
+            domain,
             keys,
             client: Arc::new(Mutex::new(Some(client))),
             relays,
         })
+    }
+
+    async fn get_user_relays(client: &Client, pubkey: &str) -> Result<Vec<String>> {
+        let filter = Filter::new().author(pubkey).kind(Kind::ContactList);
+
+        let events = client
+            .get_events_of(vec![filter], Some(Duration::from_secs(10)))
+            .await?;
+        let most_recent = events.iter().max_by_key(|event| event.created_at);
+
+        let mut relays = vec![];
+
+        if let Some(event) = most_recent {
+            let content: Value = serde_json::from_str(&event.content)?;
+            let content = content.as_object();
+            if let Some(relay) = content {
+                relays = relay.keys().map(|r| r.to_string()).collect();
+            }
+        }
+
+        Ok(relays)
     }
 
     /// Perform Nostr tasks
@@ -78,10 +97,20 @@ impl Nostr {
     async fn run_internal(&mut self) -> Result<()> {
         let mut client_guard = self.client.lock().await;
         if let Some(client) = client_guard.as_mut() {
+            client.connect().await;
+            let keys = client.keys();
+
+            let subscription = Filter::new()
+                .pubkey(keys.public_key())
+                .kind(Kind::Custom(SIGNUP_KIND));
+
+            client.subscribe(vec![subscription]).await;
+
             client
                 .handle_notifications(|notification| async {
                     if let RelayPoolNotification::Event(_url, event) = notification {
-                        if event.kind == Kind::EncryptedDirectMessage {
+                        debug!("Got event: {:?}", event.as_json());
+                        if event.kind == Kind::Custom(SIGNUP_KIND) {
                             match decrypt(
                                 &client.keys().secret_key()?,
                                 &event.pubkey,
@@ -95,10 +124,16 @@ impl Nostr {
                                         match self.db.get_user(&user_info.username).await? {
                                             Some(user) => {
                                                 if user.pubkey.eq(&event.pubkey.to_string()) {
+                                                    let relays =
+                                                        Self::get_user_relays(client, &user.pubkey)
+                                                            .await?;
+
+                                                    debug!("User relays: {:?}", relays);
+
                                                     let updated_user = User {
                                                         mint: user_info.mint,
                                                         pubkey: user.pubkey,
-                                                        relays: user_info.relays,
+                                                        relays,
                                                     };
 
                                                     self.db
@@ -124,11 +159,19 @@ impl Nostr {
                                                 }
                                             }
                                             None => {
+                                                let relays = Self::get_user_relays(
+                                                    client,
+                                                    &event.pubkey.to_string(),
+                                                )
+                                                .await?;
+
+                                                debug!("User relays: {:?}", relays);
                                                 let new_user = User {
                                                     mint: user_info.mint,
                                                     pubkey: event.pubkey.to_string(),
-                                                    relays: user_info.relays,
+                                                    relays,
                                                 };
+
                                                 self.db
                                                     .add_user(&user_info.username, &new_user)
                                                     .await?;
@@ -136,7 +179,10 @@ impl Nostr {
                                                 client
                                                     .send_direct_msg(
                                                         event.pubkey,
-                                                        "Sign up complete",
+                                                        self.sign_up_message(
+                                                            &user_info.username,
+                                                            &new_user,
+                                                        ),
                                                     )
                                                     .await?;
                                             }
@@ -152,6 +198,13 @@ impl Nostr {
                 .await?;
         }
         Ok(())
+    }
+
+    fn sign_up_message(&self, username: &str, user: &User) -> String {
+        format!(
+            "Welcome! \n You're ln address is {}@{}.\n You will get cashu tokens from mint {}",
+            username, self.domain, user.mint
+        )
     }
 
     pub async fn send_token(
