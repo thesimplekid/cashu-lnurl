@@ -72,17 +72,21 @@ impl Settings {
         default: &Settings,
         config_file_name: &Option<String>,
     ) -> Result<Self, ConfigError> {
-        let default_config_file_name = "config.toml".to_string();
-        let config: &String = match config_file_name {
-            Some(value) => value,
-            None => &default_config_file_name,
+        let mut default_config_file_name = dirs::config_dir()
+            .ok_or(ConfigError::NotFound("Config Path".to_string()))?
+            .join("cashu-lnurl");
+
+        default_config_file_name.push("config.toml");
+        let config: String = match config_file_name {
+            Some(value) => value.clone(),
+            None => default_config_file_name.to_string_lossy().to_string(),
         };
         let builder = Config::builder();
         let config: Config = builder
             // use defaults
             .add_source(Config::try_from(default)?)
             // override with file contents
-            .add_source(File::with_name(config))
+            .add_source(File::with_name(&config))
             .build()?;
         let settings: Settings = config.try_deserialize()?;
 

@@ -8,7 +8,10 @@ use cashu_crab::{
     Amount,
 };
 use log::{debug, warn};
-use tokio::sync::Mutex;
+use tokio::{
+    sync::Mutex,
+    time::{sleep, Duration},
+};
 
 use crate::{
     database::Db,
@@ -67,14 +70,16 @@ impl Cashu {
                     None => 10000,
                 };
                 if time_since_checked.gt(&15) {
-                    debug!("Check hash: {:?}", invoice.hash);
-                    match self.mint(&invoice).await {
+                    let cashu = self.clone();
+                    match cashu.mint(&invoice).await {
                         Ok(token) => {
                             debug!("Invoice Paid: {:?}", invoice);
                             // DM token to nostr npub
-                            let user = self.db.get_user(&invoice.username).await?;
+                            let user = cashu.db.get_user(&invoice.username).await?;
+
                             if let Some(user) = user {
-                                self.nostr
+                                cashu
+                                    .nostr
                                     .send_token(
                                         &user.pubkey,
                                         token,
@@ -84,21 +89,23 @@ impl Cashu {
                             }
 
                             // Remove token from pending
-                            self.db.remove_pending_invoice(&invoice.hash).await?;
+                            cashu.db.remove_pending_invoice(&invoice.hash).await?;
                         }
                         Err(err) => {
                             // Err or token is just unpaid
                             // Update checked time
-                            debug!("{}", err);
+                            warn!("{}", err);
                             let updated_invoice = invoice.update_checked_time();
 
-                            self.db
+                            cashu
+                                .db
                                 .add_pending_invoice(&invoice.hash, &updated_invoice)
                                 .await?;
                         }
                     }
                 }
             }
+            sleep(Duration::from_millis(100)).await;
         }
     }
 
@@ -107,8 +114,9 @@ impl Cashu {
         amount: Amount,
         mint_url: &str,
     ) -> Result<RequestMintResponse> {
-        debug!("Getting wallet");
+        debug!("Getting walletff");
         let wallet = self.wallet_for_url(mint_url).await?;
+        debug!("Got wallet");
         let invoice = wallet.request_mint(amount).await?;
 
         Ok(invoice)

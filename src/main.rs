@@ -27,7 +27,7 @@ mod utils;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
+        .with_max_level(tracing::Level::WARN)
         .init();
 
     let settings = config::Settings::new(&None);
@@ -39,6 +39,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let nostr_pubkey = settings.info.nostr_nsec;
     let relays = settings.info.relays;
+
+    debug!("Relays: {:?}", relays);
 
     if relays.is_empty() {
         bail!("Must define at least one relay");
@@ -55,13 +57,14 @@ async fn main() -> anyhow::Result<()> {
         relays,
     )
     .await?;
+
     let cashu = Cashu::new(db.clone(), nostr.clone());
 
     let mut nostr_clone = nostr.clone();
-    tokio::spawn(async move { nostr_clone.run().await });
+    let nostr_task = tokio::spawn(async move { nostr_clone.run().await });
 
     let cashu_clone = cashu.clone();
-    tokio::spawn(async move { cashu_clone.run().await });
+    let cashu_task = tokio::spawn(async move { cashu_clone.run().await });
 
     let state = LnurlState {
         api_base_address,
@@ -85,9 +88,19 @@ async fn main() -> anyhow::Result<()> {
 
     let listen_addr = SocketAddr::new(std::net::IpAddr::V4(ip), port);
 
-    axum::Server::bind(&listen_addr)
-        .serve(lnurl_service.into_make_service())
-        .await?;
+    let axum_task = axum::Server::bind(&listen_addr).serve(lnurl_service.into_make_service());
+
+    tokio::select! {
+        _ = nostr_task => {
+            warn!("Nostr task ended");
+        }
+        _ = cashu_task => {
+            warn!("Cashu task ended");
+        }
+        _ = axum_task => {
+            warn!("Axum task ended");
+        }
+    }
 
     Ok(())
 }
@@ -122,7 +135,10 @@ async fn get_user_lnurl_struct(
         min_sendable: state.min_sendable,
         max_sendable: state.max_sendable,
         metadata: serde_json::to_string(&vec![vec!["text/plain".to_string(), state.description]])
-            .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?,
+            .map_err(|err| {
+            warn!("{err}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?,
         callback,
         tag: LnurlTag::PayRequest,
         allows_nostr: state.nostr_pubkey.is_some(),
@@ -148,12 +164,14 @@ async fn get_user_invoice(
 
     let mint = &user.mint;
     let amount = amount_from_msat(params.amount);
-    debug!("{}", amount.to_sat());
     let request_mint_response = state
         .cashu
         .request_mint(amount, mint)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            warn!("{:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let pending_invoice = PendingInvoice::new(
         mint,
