@@ -40,6 +40,10 @@ impl Nostr {
         Ok(keys)
     }
 
+    pub fn get_pubkey(&self) -> String {
+        self.keys.public_key().to_string()
+    }
+
     /// Init Nostr Client
     pub async fn new(
         db: Db,

@@ -20,6 +20,7 @@ use crate::utils::amount_from_msat;
 mod cashu;
 mod config;
 mod database;
+mod error;
 mod nostr;
 mod types;
 mod utils;
@@ -37,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
         Some(des) => des,
         None => "Hello World".to_string(),
     };
-    let nostr_pubkey = settings.info.nostr_nsec;
+    let nostr_nsec = settings.info.nostr_nsec;
     let relays = settings.info.relays;
 
     debug!("Relays: {:?}", relays);
@@ -53,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let nostr = Nostr::new(
         db.clone(),
         api_base_address.to_string(),
-        &nostr_pubkey,
+        &nostr_nsec,
         relays,
     )
     .await?;
@@ -71,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
         min_sendable: Amount::from_sat(0),
         max_sendable: Amount::from_sat(1000000),
         description,
-        nostr_pubkey,
+        nostr_pubkey: Some(nostr.get_pubkey()),
         cashu,
         db,
     };

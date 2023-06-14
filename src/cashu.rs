@@ -15,6 +15,7 @@ use tokio::{
 
 use crate::{
     database::Db,
+    error::Error,
     nostr::Nostr,
     types::{unix_time, PendingInvoice},
 };
@@ -36,7 +37,7 @@ impl Cashu {
     }
 
     /// Get wallet for uri
-    async fn wallet_for_url(&self, mint_url: &str) -> Result<CashuWallet> {
+    async fn wallet_for_url(&self, mint_url: &str) -> Result<CashuWallet, Error> {
         let mut wallets = self.mints.lock().await;
         let cashu_wallet = match wallets.get(mint_url) {
             Some(Some(wallet)) => wallet.clone(),
@@ -94,7 +95,13 @@ impl Cashu {
                         Err(err) => {
                             // Err or token is just unpaid
                             // Update checked time
-                            warn!("{}", err);
+                            match err {
+                                Error::CashuError(cashu_crab::error::Error::CrabMintError(
+                                    cashu_crab::client::Error::InvoiceNotPaid,
+                                )) => {}
+                                _ => warn!("{}", err),
+                            };
+
                             let updated_invoice = invoice.update_checked_time();
 
                             cashu
@@ -113,7 +120,7 @@ impl Cashu {
         &self,
         amount: Amount,
         mint_url: &str,
-    ) -> Result<RequestMintResponse> {
+    ) -> Result<RequestMintResponse, Error> {
         debug!("Getting walletff");
         let wallet = self.wallet_for_url(mint_url).await?;
         debug!("Got wallet");
@@ -122,7 +129,7 @@ impl Cashu {
         Ok(invoice)
     }
 
-    pub async fn mint(&self, pending_invoice: &PendingInvoice) -> Result<Token> {
+    pub async fn mint(&self, pending_invoice: &PendingInvoice) -> Result<Token, Error> {
         let wallet = self.wallet_for_url(&pending_invoice.mint).await?;
 
         let mint_response = wallet
