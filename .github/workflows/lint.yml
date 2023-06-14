@@ -21,7 +21,7 @@ jobs:
     - name: typos-action
       uses: crate-ci/typos@v1.0.4
     - name: Run fmt
-      run: cd rust && cargo fmt --all --check 
+      run: cargo fmt --all --check 
     - name: Run clippy
       run: |
         rustup component add clippy
