@@ -39,6 +39,8 @@ pub struct Info {
     pub relays: HashSet<String>,
     pub mint: String,
     pub invoice_description: Option<String>,
+    pub proxy: bool,
+    pub cln_rpc_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

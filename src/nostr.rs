@@ -3,7 +3,7 @@ use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
-use cashu_crab::types::Token;
+use cashu_crab::nuts::nut00::wallet::Token;
 use log::{debug, warn};
 use nostr_sdk::prelude::*;
 use tokio::sync::Mutex;

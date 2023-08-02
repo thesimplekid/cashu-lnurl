@@ -1,12 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
-use cashu_crab::{
-    cashu_wallet::CashuWallet,
-    client::Client,
-    types::{RequestMintResponse, Token},
-    Amount,
-};
+use cashu_crab::nuts::nut00::wallet::Token;
+use cashu_crab::nuts::nut03::RequestMintResponse;
+use cashu_crab::wallet::Wallet as CashuWallet;
+use cashu_crab::{client::Client, Amount};
 use log::{debug, warn};
 use tokio::{
     sync::Mutex,
@@ -89,6 +87,8 @@ impl Cashu {
                                     .await?;
                             }
 
+                            // TODO: If proxy is true broadcast zap
+
                             // Remove token from pending
                             cashu.db.remove_pending_invoice(&invoice.hash).await?;
                         }
@@ -96,9 +96,12 @@ impl Cashu {
                             // Err or token is just unpaid
                             // Update checked time
                             match err {
-                                Error::CashuError(cashu_crab::error::Error::CrabMintError(
-                                    cashu_crab::client::Error::InvoiceNotPaid,
-                                )) => {}
+                                /*
+                                    Error::CashuError(cashu_crab::error::Error::CrabMintError(
+                                        cashu_crab::client::Error::InvoiceNotPaid,
+                                    )) => {}
+
+                                */
                                 _ => warn!("{}", err),
                             };
 
@@ -124,7 +127,7 @@ impl Cashu {
         debug!("Getting walletff");
         let wallet = self.wallet_for_url(mint_url).await?;
         debug!("Got wallet");
-        let invoice = wallet.request_mint(amount).await?;
+        let invoice = wallet.request_mint(amount).await.unwrap();
 
         Ok(invoice)
     }
@@ -134,7 +137,8 @@ impl Cashu {
 
         let mint_response = wallet
             .mint_token(pending_invoice.amount, &pending_invoice.hash)
-            .await?;
+            .await
+            .unwrap();
 
         Ok(mint_response)
     }

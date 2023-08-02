@@ -78,7 +78,7 @@ impl Db {
         Ok(())
     }
 
-    pub async fn _get_pending_invoice(&self, hash: &str) -> Result<Option<PendingInvoice>> {
+    pub async fn get_pending_invoice(&self, hash: &str) -> Result<Option<PendingInvoice>> {
         let db = self.db.lock().await;
 
         let read_txn = db.begin_read()?;

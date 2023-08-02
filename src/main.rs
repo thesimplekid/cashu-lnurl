@@ -1,18 +1,31 @@
+use std::fs::{self, File};
+use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
+use anyhow::anyhow;
 use anyhow::bail;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use cashu::Cashu;
-use cashu_crab::Amount;
+use cashu_crab::{Amount, Bolt11Invoice};
+use cln_rpc::model::{InvoiceRequest, WaitanyinvoiceRequest, WaitanyinvoiceResponse};
+use cln_rpc::primitives::{Amount as CLN_Amount, AmountOrAny};
+use cln_rpc::ClnRpc;
 use database::Db;
-use log::{debug, warn};
+use dirs::data_dir;
+use futures::{Stream, StreamExt};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use types::{as_msat, PendingInvoice};
+use tokio::sync::Mutex;
+use types::{as_msat, unix_time, PendingInvoice};
 use url::Url;
+use uuid::Uuid;
 
 use crate::nostr::Nostr;
 use crate::utils::amount_from_msat;
@@ -34,6 +47,7 @@ async fn main() -> anyhow::Result<()> {
     let settings = config::Settings::new(&None);
 
     let api_base_address = Url::from_str(&settings.info.url)?;
+    let rpc_socket = settings.info.cln_rpc_path.clone().unwrap();
     let description = match settings.info.invoice_description {
         Some(des) => des,
         None => "Hello World".to_string(),
@@ -67,14 +81,22 @@ async fn main() -> anyhow::Result<()> {
     let cashu_clone = cashu.clone();
     let cashu_task = tokio::spawn(async move { cashu_clone.run().await });
 
+    let cln_client = Arc::new(Mutex::new(Some(
+        ClnRpc::new(settings.info.cln_rpc_path.clone().unwrap()).await?,
+    )));
+
+    let db_clone = db.clone();
+    let cashu_clone = cashu.clone();
     let state = LnurlState {
         api_base_address,
         min_sendable: Amount::from_sat(0),
         max_sendable: Amount::from_sat(1000000),
         description,
         nostr_pubkey: Some(nostr.get_pubkey()),
+        proxy: settings.info.proxy,
         cashu,
         db,
+        cln_client,
     };
 
     let lnurl_service = Router::new()
@@ -91,6 +113,68 @@ async fn main() -> anyhow::Result<()> {
 
     let axum_task = axum::Server::bind(&listen_addr).serve(lnurl_service.into_make_service());
 
+    // Task that waits for invoice to be paid
+    // When an invoice paid check db if invoice exists request mint and pay and mint
+    // DM tokens to user
+
+    let wait_invoice_task = tokio::spawn(async move {
+        // Get pay index file path from cln config if set
+        // if not set to default
+        // TODO:
+        let pay_index_path = index_file_path().unwrap();
+
+        let last_pay_index = match read_last_pay_index(&pay_index_path) {
+            Ok(idx) => idx,
+            Err(e) => {
+                warn!("Could not read last pay index: {e}");
+                if let Err(e) = write_last_pay_index(&pay_index_path, 0) {
+                    warn!("Write error: {e}");
+                }
+                0
+            }
+        };
+        info!("Starting at pay index: {last_pay_index}");
+
+        let mut invoices = invoice_stream(&rpc_socket, pay_index_path, Some(last_pay_index))
+            .await
+            .unwrap();
+        let db = db_clone;
+        let cashu = cashu_clone;
+        while let Some((hash, _invoice)) = invoices.next().await {
+            // Check if invoice is in db and proxied
+            // If it is request mint from selected mint
+            if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
+                let request_mint_response = cashu
+                    .request_mint(invoice.amount, &invoice.mint)
+                    .await
+                    .map_err(|err| {
+                        warn!("{:?}", err);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })
+                    .unwrap();
+
+                let pending_invoice = PendingInvoice::new(
+                    &invoice.mint,
+                    &invoice.username,
+                    invoice.description,
+                    invoice.amount,
+                    &request_mint_response.hash,
+                    request_mint_response.pr.clone(),
+                    None,
+                    true,
+                );
+                cashu
+                    .add_pending_invoice(&pending_invoice)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+                    .unwrap();
+
+                // TODO: Remove paid invoice from pending
+            }
+            // If not ignore
+        }
+    });
+
     tokio::select! {
         _ = nostr_task => {
             warn!("Nostr task ended");
@@ -101,8 +185,97 @@ async fn main() -> anyhow::Result<()> {
         _ = axum_task => {
             warn!("Axum task ended");
         }
+        _ = wait_invoice_task => {
+            warn!("Wait invoice task ended");
+
+        }
     }
 
+    Ok(())
+}
+
+async fn invoice_stream(
+    socket_addr: &str,
+    pay_index_path: PathBuf,
+    last_pay_index: Option<u64>,
+) -> anyhow::Result<impl Stream<Item = (String, WaitanyinvoiceResponse)>> {
+    let cln_client = cln_rpc::ClnRpc::new(&socket_addr).await?;
+
+    Ok(futures::stream::unfold(
+        (cln_client, pay_index_path, last_pay_index),
+        |(mut cln_client, pay_index_path, mut last_pay_idx)| async move {
+            // We loop here since some invoices aren't zaps, in which case we wait for the next one and don't yield
+            loop {
+                // info!("Waiting for index: {last_pay_idx:?}");
+                let invoice_res = cln_client
+                    .call(cln_rpc::Request::WaitAnyInvoice(WaitanyinvoiceRequest {
+                        timeout: None,
+                        lastpay_index: last_pay_idx,
+                    }))
+                    .await;
+
+                let invoice: WaitanyinvoiceResponse = match invoice_res {
+                    Ok(invoice) => invoice,
+                    Err(e) => {
+                        warn!("Error fetching invoice: {e}");
+                        // Let's not spam CLN with requests on failure
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        // Retry same request
+                        continue;
+                    }
+                }
+                .try_into()
+                .expect("Wrong response from CLN");
+
+                last_pay_idx = invoice.pay_index;
+                if let Some(idx) = last_pay_idx {
+                    if let Err(e) = write_last_pay_index(&pay_index_path, idx) {
+                        warn!("Could not write index tip: {e}");
+                    }
+                };
+                let pay_idx = last_pay_idx;
+
+                break Some((
+                    (invoice.payment_hash.to_string(), invoice),
+                    (cln_client, pay_index_path, pay_idx),
+                ));
+            }
+        },
+    )
+    .boxed())
+}
+
+/// Default file path for last pay index tip
+fn index_file_path() -> anyhow::Result<PathBuf> {
+    let mut file_path = match data_dir() {
+        Some(path) => path,
+        None => return Err(anyhow!("no data dir")),
+    };
+
+    file_path.push("cln-zapper");
+    file_path.push("last_pay_index");
+
+    Ok(file_path)
+}
+
+/// Read last pay index tip from file
+fn read_last_pay_index(file_path: &PathBuf) -> anyhow::Result<u64> {
+    let mut file = File::open(file_path)?;
+    let mut buffer = [0; 8];
+
+    file.read_exact(&mut buffer)?;
+    Ok(u64::from_ne_bytes(buffer))
+}
+
+/// Write last pay index tip to file
+fn write_last_pay_index(file_path: &PathBuf, last_pay_index: u64) -> anyhow::Result<()> {
+    // Create the directory if it doesn't exist
+    if let Some(parent_dir) = file_path.parent() {
+        fs::create_dir_all(parent_dir)?;
+    }
+
+    let mut file = File::create(file_path)?;
+    file.write_all(&last_pay_index.to_ne_bytes())?;
     Ok(())
 }
 
@@ -165,24 +338,69 @@ async fn get_user_invoice(
 
     let mint = &user.mint;
     let amount = amount_from_msat(params.amount);
-    let request_mint_response = state
-        .cashu
-        .request_mint(amount, mint)
-        .await
-        .map_err(|err| {
-            warn!("{:?}", err);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
 
-    let pending_invoice = PendingInvoice::new(
-        mint,
-        &username,
-        params.nostr,
-        amount_from_msat(params.amount),
-        &request_mint_response.hash,
-        request_mint_response.pr.clone(),
-        None,
-    );
+    let pending_invoice = match state.proxy {
+        true => {
+            let client = state.cln_client.clone();
+
+            let cln_response = client
+                .lock()
+                .await
+                .as_mut()
+                .unwrap()
+                .call(cln_rpc::Request::Invoice(InvoiceRequest {
+                    amount_msat: AmountOrAny::Amount(CLN_Amount::from_sat(amount.to_sat())),
+                    description: params.nostr.clone().unwrap(),
+                    label: Uuid::new_v4().to_string(),
+                    expiry: None,
+                    fallbacks: None,
+                    preimage: None,
+                    cltv: None,
+                    deschashonly: Some(true),
+                }))
+                .await
+                .unwrap();
+
+            match cln_response {
+                cln_rpc::Response::Invoice(invoice_response) => {
+                    let invoice = Bolt11Invoice::from_str(&invoice_response.bolt11).unwrap();
+                    let pending_invoice = PendingInvoice::new(
+                        mint,
+                        &username,
+                        params.clone().nostr,
+                        amount_from_msat(params.amount),
+                        &invoice_response.payment_hash.to_string(),
+                        invoice,
+                        Some(unix_time()),
+                        true,
+                    );
+                    pending_invoice
+                }
+                _ => panic!("CLN returned wrong response kind"),
+            }
+        }
+        false => {
+            let request_mint_response =
+                state
+                    .cashu
+                    .request_mint(amount, mint)
+                    .await
+                    .map_err(|err| {
+                        warn!("{:?}", err);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })?;
+            PendingInvoice::new(
+                mint,
+                &username,
+                params.nostr,
+                amount_from_msat(params.amount),
+                &request_mint_response.hash,
+                request_mint_response.pr.clone(),
+                None,
+                false,
+            )
+        }
+    };
 
     state
         .cashu
@@ -191,13 +409,13 @@ async fn get_user_invoice(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(GetInvoiceResponse {
-        pr: request_mint_response.pr.to_string(),
+        pr: pending_invoice.bolt11.to_string(),
         success_action: None,
         routes: vec![],
     }))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GetInvoiceParams {
     amount: u64,
     nostr: Option<String>,
@@ -219,14 +437,17 @@ enum LnurlTag {
     PayRequest,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct LnurlState {
     api_base_address: Url,
     min_sendable: Amount,
     max_sendable: Amount,
     description: String,
     nostr_pubkey: Option<String>,
+    // If proxied cashu-lnurl created the invoice
+    proxy: bool,
     cashu: Cashu,
+    cln_client: Arc<Mutex<Option<ClnRpc>>>,
     db: Db,
 }
 

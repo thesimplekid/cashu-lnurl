@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use cashu_crab::{Amount, Invoice};
+use cashu_crab::{Amount, Bolt11Invoice};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::utils::{amount_from_msat, msat_from_amount};
@@ -41,8 +41,9 @@ pub struct PendingInvoice {
     #[serde(with = "as_msat")]
     pub amount: Amount,
     pub hash: String,
-    pub bolt11: Invoice,
+    pub bolt11: Bolt11Invoice,
     pub last_checked: Option<u64>,
+    pub proxied: bool,
 }
 
 impl PendingInvoice {
@@ -52,8 +53,9 @@ impl PendingInvoice {
         description: Option<String>,
         amount: Amount,
         hash: &str,
-        bolt11: Invoice,
+        bolt11: Bolt11Invoice,
         last_checked: Option<u64>,
+        proxied: bool,
     ) -> Self {
         Self {
             mint: mint.to_string(),
@@ -64,6 +66,7 @@ impl PendingInvoice {
             hash: hash.to_string(),
             bolt11,
             last_checked,
+            proxied,
         }
     }
 
@@ -82,6 +85,7 @@ impl PendingInvoice {
             hash: self.hash.clone(),
             bolt11: self.bolt11.clone(),
             last_checked: Some(unix_time()),
+            proxied: self.proxied,
         }
     }
 }
