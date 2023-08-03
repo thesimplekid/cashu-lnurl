@@ -211,6 +211,19 @@ impl Nostr {
         )
     }
 
+    pub async fn send_sign_up_message(&self, username: &str, user: &User) -> anyhow::Result<()> {
+        let mut client_guard = self.client.lock().await;
+        if let Some(client) = client_guard.as_mut() {
+            client
+                .send_direct_msg(
+                    XOnlyPublicKey::from_str(&user.pubkey)?,
+                    self.sign_up_message(&username, &user),
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
     pub async fn send_token(
         &self,
         receiver: &str,

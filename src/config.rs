@@ -40,7 +40,8 @@ pub struct Info {
     pub mint: String,
     pub invoice_description: Option<String>,
     pub proxy: bool,
-    pub cln_rpc_path: Option<String>,
+    pub cln_path: Option<String>,
+    pub db_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -90,7 +91,7 @@ impl Settings {
             // override with file contents
             .add_source(File::with_name(&config))
             .build()?;
-        let settings: Settings = config.try_deserialize()?;
+        let settings: Settings = config.try_deserialize().unwrap();
 
         debug!("{settings:?}");
 

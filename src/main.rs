@@ -14,16 +14,17 @@ use axum::routing::get;
 use axum::{Json, Router};
 use cashu::Cashu;
 use cashu_crab::{Amount, Bolt11Invoice};
-use cln_rpc::model::{InvoiceRequest, WaitanyinvoiceRequest, WaitanyinvoiceResponse};
+use cln_rpc::model::{InvoiceRequest, PayRequest, WaitanyinvoiceRequest, WaitanyinvoiceResponse};
 use cln_rpc::primitives::{Amount as CLN_Amount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use database::Db;
 use dirs::data_dir;
 use futures::{Stream, StreamExt};
 use log::{debug, info, warn};
+use nostr_sdk::secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use types::{as_msat, unix_time, PendingInvoice};
+use types::{as_msat, unix_time, PendingInvoice, User};
 use url::Url;
 use uuid::Uuid;
 
@@ -44,10 +45,12 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing::Level::WARN)
         .init();
 
-    let settings = config::Settings::new(&None);
+    let settings = config::Settings::new(&Some("./config.toml".to_string()));
+
+    print!("{:?}", settings);
 
     let api_base_address = Url::from_str(&settings.info.url)?;
-    let rpc_socket = settings.info.cln_rpc_path.clone().unwrap();
+    let rpc_socket = settings.info.cln_path.clone().unwrap();
     let description = match settings.info.invoice_description {
         Some(des) => des,
         None => "Hello World".to_string(),
@@ -61,10 +64,17 @@ async fn main() -> anyhow::Result<()> {
         bail!("Must define at least one relay");
     }
 
-    let data_dir = dirs::data_dir().unwrap();
-    let data = data_dir.join("cashu-lnurl");
+    let db_path = match settings.info.db_path {
+        Some(path) => PathBuf::from_str(&path)?,
+        None => {
+            let data_dir = dirs::data_dir().unwrap();
+            data_dir.join("cashu-lnurl")
+        }
+    };
 
-    let db = Db::new(data).await?;
+    let db = Db::new(db_path).await?;
+
+    println!("db created");
     let nostr = Nostr::new(
         db.clone(),
         api_base_address.to_string(),
@@ -82,11 +92,13 @@ async fn main() -> anyhow::Result<()> {
     let cashu_task = tokio::spawn(async move { cashu_clone.run().await });
 
     let cln_client = Arc::new(Mutex::new(Some(
-        ClnRpc::new(settings.info.cln_rpc_path.clone().unwrap()).await?,
+        ClnRpc::new(settings.info.cln_path.clone().unwrap()).await?,
     )));
 
     let db_clone = db.clone();
     let cashu_clone = cashu.clone();
+    let cln_client_clone = cln_client.clone();
+
     let state = LnurlState {
         api_base_address,
         min_sendable: Amount::from_sat(0),
@@ -97,11 +109,13 @@ async fn main() -> anyhow::Result<()> {
         cashu,
         db,
         cln_client,
+        nostr,
     };
 
     let lnurl_service = Router::new()
         .route("/.well-known/lnurlp/:username", get(get_user_lnurl_struct))
         .route("/lnurlp/:username/invoice", get(get_user_invoice))
+        .route("/signup", get(get_sign_up))
         .with_state(state);
 
     let address = settings.network.address;
@@ -140,6 +154,8 @@ async fn main() -> anyhow::Result<()> {
             .unwrap();
         let db = db_clone;
         let cashu = cashu_clone;
+        let cln_client = cln_client_clone;
+
         while let Some((hash, _invoice)) = invoices.next().await {
             // Check if invoice is in db and proxied
             // If it is request mint from selected mint
@@ -163,15 +179,51 @@ async fn main() -> anyhow::Result<()> {
                     None,
                     true,
                 );
+
+                // Add mint pending ivoice to DB
                 cashu
                     .add_pending_invoice(&pending_invoice)
                     .await
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
                     .unwrap();
 
-                // TODO: Remove paid invoice from pending
+                // Remove paid invoice from pending
+                db.remove_pending_invoice(&invoice.hash).await.unwrap();
+
+                // Pay mint invoice
+                let mut cln_client = cln_client.lock().await;
+
+                let cln_response = cln_client
+                    .as_mut()
+                    .unwrap()
+                    .call(cln_rpc::Request::Pay(PayRequest {
+                        bolt11: request_mint_response.pr.to_string(),
+                        amount_msat: None,
+                        label: None,
+                        riskfactor: None,
+                        maxfeepercent: None,
+                        retry_for: None,
+                        maxdelay: None,
+                        exemptfee: None,
+                        localinvreqid: None,
+                        exclude: None,
+                        // TODO: handle fees
+                        maxfee: None,
+                        description: None,
+                    }))
+                    .await
+                    .unwrap();
+
+                let invoice = match cln_response {
+                    cln_rpc::Response::Pay(pay_response) => (
+                        serde_json::to_string(&pay_response.payment_preimage).unwrap(),
+                        Amount::from(pay_response.amount_sent_msat.msat() / 1000),
+                    ),
+                    _ => panic!(),
+                };
+
+                debug!("Invoice paid: {:?}", invoice);
             }
-            // If not ignore
         }
     });
 
@@ -416,6 +468,52 @@ async fn get_user_invoice(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct SignupParams {
+    username: String,
+    pubkey: XOnlyPublicKey,
+    proxy: Option<bool>,
+    mint: String,
+    relay: Option<String>,
+}
+
+async fn get_sign_up(
+    Query(params): Query<SignupParams>,
+    State(state): State<LnurlState>,
+) -> Result<StatusCode, StatusCode> {
+    if let Ok(Some(_)) = state.db.get_user(&params.username).await {
+        println!("{:?}", state.db.get_user(&params.username).await);
+        return Ok(StatusCode::CONFLICT);
+    }
+
+    let relays = if let Some(relay) = params.relay {
+        vec![relay]
+    } else {
+        vec![]
+    };
+
+    let new_user = User {
+        mint: params.mint,
+        pubkey: params.pubkey.to_string(),
+        // TODO: Get relays
+        relays,
+    };
+
+    state
+        .db
+        .add_user(&params.username, &new_user)
+        .await
+        .unwrap();
+    /*
+        state
+            .nostr
+            .send_sign_up_message(&params.username, &new_user)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    */
+    Ok(StatusCode::OK)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GetInvoiceParams {
     amount: u64,
     nostr: Option<String>,
@@ -449,6 +547,7 @@ struct LnurlState {
     cashu: Cashu,
     cln_client: Arc<Mutex<Option<ClnRpc>>>,
     db: Db,
+    nostr: Nostr,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

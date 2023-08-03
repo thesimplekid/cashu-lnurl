@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::debug;
+use log::{debug, warn};
 use redb::{Database, ReadableTable, TableDefinition};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
@@ -18,11 +18,13 @@ pub struct Db {
 impl Db {
     /// Init Database
     pub async fn new(path: PathBuf) -> Result<Self> {
-        if let Err(_err) = fs::create_dir_all(&path) {}
+        if let Err(err) = fs::create_dir_all(&path) {
+            warn!("Could not create db path {:?}", err);
+        }
         let db_path = path.join("cashu-lnurl.redb");
-        let database = Database::create(db_path)?;
+        let database = Database::create(db_path).unwrap();
 
-        let write_txn = database.begin_write()?;
+        let write_txn = database.begin_write().unwrap();
         {
             let _ = write_txn.open_table(USERS)?;
             let _ = write_txn.open_table(PENDING)?;
