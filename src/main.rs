@@ -174,16 +174,17 @@ async fn main() -> anyhow::Result<()> {
                         })
                         .unwrap();
 
-                    let pending_invoice = PendingInvoice::new(
-                        &invoice.mint,
-                        &invoice.username,
-                        invoice.description,
-                        invoice.amount,
-                        &request_mint_response.hash,
-                        request_mint_response.pr.clone(),
-                        None,
-                        true,
-                    );
+                    let pending_invoice = PendingInvoice {
+                        mint: invoice.mint,
+                        username: invoice.username,
+                        description: invoice.description,
+                        amount: invoice.amount,
+                        hash: request_mint_response.hash,
+                        bolt11: request_mint_response.pr.clone(),
+                        last_checked: None,
+                        proxied: true,
+                        time: unix_time(),
+                    };
 
                     // Add mint pending ivoice to DB
                     cashu
@@ -446,16 +447,17 @@ async fn get_user_invoice(
         match cln_response {
             cln_rpc::Response::Invoice(invoice_response) => {
                 let invoice = Bolt11Invoice::from_str(&invoice_response.bolt11).unwrap();
-                PendingInvoice::new(
-                    mint,
-                    &username,
-                    params.clone().nostr,
-                    amount_from_msat(params.amount),
-                    &invoice_response.payment_hash.to_string(),
-                    invoice,
-                    Some(unix_time()),
-                    true,
-                )
+                PendingInvoice {
+                    mint: mint.to_string(),
+                    username,
+                    description: params.clone().nostr,
+                    amount: amount_from_msat(params.amount),
+                    time: unix_time(),
+                    hash: invoice_response.payment_hash.to_string(),
+                    bolt11: invoice,
+                    last_checked: Some(unix_time()),
+                    proxied: true,
+                }
             }
             _ => panic!("CLN returned wrong response kind"),
         }
@@ -469,16 +471,17 @@ async fn get_user_invoice(
                     warn!("{:?}", err);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
-        PendingInvoice::new(
-            mint,
-            &username,
-            params.nostr,
-            amount_from_msat(params.amount),
-            &request_mint_response.hash,
-            request_mint_response.pr.clone(),
-            None,
-            false,
-        )
+        PendingInvoice {
+            mint: mint.to_string(),
+            username,
+            description: params.nostr,
+            amount: amount_from_msat(params.amount),
+            hash: request_mint_response.hash,
+            bolt11: request_mint_response.pr,
+            last_checked: None,
+            proxied: false,
+            time: unix_time(),
+        }
     };
 
     state

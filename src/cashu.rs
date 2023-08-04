@@ -5,11 +5,11 @@ use cashu_crab::nuts::nut00::wallet::Token;
 use cashu_crab::nuts::nut03::RequestMintResponse;
 use cashu_crab::wallet::Wallet as CashuWallet;
 use cashu_crab::{client::Client, Amount};
-use log::{debug, warn};
 use tokio::{
     sync::Mutex,
     time::{sleep, Duration},
 };
+use tracing::{debug, warn};
 
 use crate::{
     database::Db,
@@ -95,15 +95,7 @@ impl Cashu {
                         Err(err) => {
                             // Err or token is just unpaid
                             // Update checked time
-                            match err {
-                                /*
-                                    Error::CashuError(cashu_crab::error::Error::CrabMintError(
-                                        cashu_crab::client::Error::InvoiceNotPaid,
-                                    )) => {}
-
-                                */
-                                _ => warn!("{}", err),
-                            };
+                            warn!("{}", err);
 
                             let updated_invoice = invoice.update_checked_time();
 
@@ -124,7 +116,6 @@ impl Cashu {
         amount: Amount,
         mint_url: &str,
     ) -> Result<RequestMintResponse, Error> {
-        debug!("Getting walletff");
         let wallet = self.wallet_for_url(mint_url).await?;
         debug!("Got wallet");
         let invoice = wallet.request_mint(amount).await.unwrap();
@@ -132,25 +123,12 @@ impl Cashu {
         Ok(invoice)
     }
 
-    pub async fn mint(&self, pending_invoice: &PendingInvoice) -> Result<Token, Error> {
+    pub async fn mint(&self, pending_invoice: &PendingInvoice) -> Result<Token> {
         let wallet = self.wallet_for_url(&pending_invoice.mint).await?;
 
-        let mut response: Result<Token, cashu_crab::error::wallet::Error>;
-
-        loop {
-            response = wallet
-                .mint_token(pending_invoice.amount, &pending_invoice.hash)
-                .await;
-
-            if response.is_ok() {
-                // Token minting successful, break the loop and return the response
-                break;
-            }
-
-            // Wait for a while before retrying
-            sleep(Duration::from_secs(5)).await;
-        }
-        Ok(response.unwrap())
+        Ok(wallet
+            .mint_token(pending_invoice.amount, &pending_invoice.hash)
+            .await?)
     }
 
     pub async fn add_pending_invoice(&self, pending_invoice: &PendingInvoice) -> Result<()> {

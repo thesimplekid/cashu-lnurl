@@ -4,9 +4,9 @@ use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use cashu_crab::nuts::nut00::wallet::Token;
-use log::{debug, warn};
 use nostr_sdk::prelude::*;
 use tokio::sync::Mutex;
+use tracing::{debug, error, warn};
 use tungstenite::Message as WsMessage;
 
 use crate::database::Db;
@@ -196,7 +196,7 @@ impl Nostr {
                                         }
                                     }
                                 }
-                                Err(e) => log::error!("Impossible to decrypt direct message: {e}"),
+                                Err(e) => error!("Impossible to decrypt direct message: {e}"),
                             }
                         }
                     }

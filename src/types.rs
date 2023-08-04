@@ -49,29 +49,6 @@ pub struct PendingInvoice {
 }
 
 impl PendingInvoice {
-    pub fn new(
-        mint: &str,
-        username: &str,
-        description: Option<String>,
-        amount: Amount,
-        hash: &str,
-        bolt11: Bolt11Invoice,
-        last_checked: Option<u64>,
-        proxied: bool,
-    ) -> Self {
-        Self {
-            mint: mint.to_string(),
-            username: username.to_string(),
-            description,
-            time: unix_time(),
-            amount,
-            hash: hash.to_string(),
-            bolt11,
-            last_checked,
-            proxied,
-        }
-    }
-
     /// Get transaction as json string
     pub fn as_json(&self) -> String {
         serde_json::json!(self).to_string()

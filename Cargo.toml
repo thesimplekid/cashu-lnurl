@@ -16,7 +16,6 @@ config = { version = "0.12", features = ["toml"] }
 dirs = "5.0.1"
 futures = "0.3.28"
 lazy_static = "1.4.0"
-log = "0.4.18"
 nostr-sdk = { git = "https://github.com/rust-nostr/nostr", rev="eced782", default-features = false, features=["nip04", "nip19"]}
 redb = "1.0.0"
 serde = "1.0.163"

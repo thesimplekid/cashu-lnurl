@@ -1,8 +1,8 @@
 use anyhow::Result;
-use log::{debug, warn};
 use redb::{Database, ReadableTable, TableDefinition};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
+use tracing::{debug, warn};
 
 use crate::types::{PendingInvoice, User};
 

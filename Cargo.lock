@@ -309,7 +309,6 @@ dependencies = [
  "dirs",
  "futures",
  "lazy_static",
- "log",
  "nostr-sdk",
  "redb",
  "serde",
