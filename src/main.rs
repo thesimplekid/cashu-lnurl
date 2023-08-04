@@ -46,7 +46,7 @@ mod utils;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::WARN)
+        .with_max_level(tracing::Level::DEBUG)
         .init();
 
     let settings = config::Settings::new(&Some("./config.toml".to_string()));
