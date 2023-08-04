@@ -23,6 +23,8 @@ pub struct User {
     pub pubkey: String,
     /// Nostr Relays
     pub relays: Vec<String>,
+    /// Proxy Invoice to mint
+    pub proxy: bool,
 }
 
 impl User {

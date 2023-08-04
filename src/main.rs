@@ -135,128 +135,142 @@ async fn main() -> anyhow::Result<()> {
     // When an invoice paid check db if invoice exists request mint and pay and mint
     // DM tokens to user
 
-    let wait_invoice_task = tokio::spawn(async move {
-        // Get pay index file path from cln config if set
-        // if not set to default
-        // TODO:
-        let pay_index_path = index_file_path().unwrap();
+    if settings.info.proxy {
+        let wait_invoice_task = tokio::spawn(async move {
+            // Get pay index file path from cln config if set
+            // if not set to default
+            // TODO:
+            let pay_index_path = index_file_path().unwrap();
 
-        let last_pay_index = match read_last_pay_index(&pay_index_path) {
-            Ok(idx) => idx,
-            Err(e) => {
-                warn!("Could not read last pay index: {e}");
-                if let Err(e) = write_last_pay_index(&pay_index_path, 0) {
-                    warn!("Write error: {e}");
+            let last_pay_index = match read_last_pay_index(&pay_index_path) {
+                Ok(idx) => idx,
+                Err(e) => {
+                    warn!("Could not read last pay index: {e}");
+                    if let Err(e) = write_last_pay_index(&pay_index_path, 0) {
+                        warn!("Write error: {e}");
+                    }
+                    0
                 }
-                0
-            }
-        };
-        info!("Starting at pay index: {last_pay_index}");
+            };
+            info!("Starting at pay index: {last_pay_index}");
 
-        let mut invoices = invoice_stream(&rpc_socket, pay_index_path, Some(last_pay_index))
-            .await
-            .unwrap();
-        let db = db_clone;
-        let cashu = cashu_clone;
-        let cln_client = cln_client_clone;
+            let mut invoices = invoice_stream(&rpc_socket, pay_index_path, Some(last_pay_index))
+                .await
+                .unwrap();
+            let db = db_clone;
+            let cashu = cashu_clone;
+            let cln_client = cln_client_clone;
 
-        while let Some((hash, _invoice)) = invoices.next().await {
-            // Check if invoice is in db and proxied
-            // If it is request mint from selected mint
-            if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
-                let request_mint_response = cashu
-                    .request_mint(invoice.amount, &invoice.mint)
-                    .await
-                    .map_err(|err| {
-                        warn!("{:?}", err);
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    })
-                    .unwrap();
+            while let Some((hash, _invoice)) = invoices.next().await {
+                // Check if invoice is in db and proxied
+                // If it is request mint from selected mint
+                if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
+                    let request_mint_response = cashu
+                        .request_mint(invoice.amount, &invoice.mint)
+                        .await
+                        .map_err(|err| {
+                            warn!("{:?}", err);
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        })
+                        .unwrap();
 
-                let pending_invoice = PendingInvoice::new(
-                    &invoice.mint,
-                    &invoice.username,
-                    invoice.description,
-                    invoice.amount,
-                    &request_mint_response.hash,
-                    request_mint_response.pr.clone(),
-                    None,
-                    true,
-                );
+                    let pending_invoice = PendingInvoice::new(
+                        &invoice.mint,
+                        &invoice.username,
+                        invoice.description,
+                        invoice.amount,
+                        &request_mint_response.hash,
+                        request_mint_response.pr.clone(),
+                        None,
+                        true,
+                    );
 
-                // Add mint pending ivoice to DB
-                cashu
-                    .add_pending_invoice(&pending_invoice)
-                    .await
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
-                    .unwrap();
+                    // Add mint pending ivoice to DB
+                    cashu
+                        .add_pending_invoice(&pending_invoice)
+                        .await
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+                        .unwrap();
 
-                // Remove paid invoice from pending
-                db.remove_pending_invoice(&invoice.hash).await.unwrap();
+                    // Remove paid invoice from pending
+                    db.remove_pending_invoice(&invoice.hash).await.unwrap();
 
-                // Pay mint invoice
-                let mut cln_client = cln_client.lock().await;
+                    // Pay mint invoice
+                    let mut cln_client = cln_client.lock().await;
 
-                let cln_response = cln_client
-                    .as_mut()
-                    .unwrap()
-                    .call(cln_rpc::Request::Pay(PayRequest {
-                        bolt11: request_mint_response.pr.to_string(),
-                        amount_msat: None,
-                        label: None,
-                        riskfactor: None,
-                        maxfeepercent: None,
-                        retry_for: None,
-                        maxdelay: None,
-                        exemptfee: None,
-                        localinvreqid: None,
-                        exclude: None,
-                        // TODO: handle fees
-                        maxfee: None,
-                        description: None,
-                    }))
-                    .await
-                    .unwrap();
+                    let cln_response = cln_client
+                        .as_mut()
+                        .unwrap()
+                        .call(cln_rpc::Request::Pay(PayRequest {
+                            bolt11: request_mint_response.pr.to_string(),
+                            amount_msat: None,
+                            label: None,
+                            riskfactor: None,
+                            maxfeepercent: None,
+                            retry_for: None,
+                            maxdelay: None,
+                            exemptfee: None,
+                            localinvreqid: None,
+                            exclude: None,
+                            // TODO: handle fees
+                            maxfee: None,
+                            description: None,
+                        }))
+                        .await
+                        .unwrap();
 
-                println!("{:?}", cln_response);
+                    println!("{:?}", cln_response);
 
-                // TODO: Handle self payment
+                    // TODO: Handle self payment
 
-                let invoice = match cln_response {
-                    cln_rpc::Response::Pay(pay_response) => (
-                        serde_json::to_string(&pay_response.payment_preimage).unwrap(),
-                        Amount::from(pay_response.amount_sent_msat.msat() / 1000),
-                    ),
-                    /*
-                                Err(err) => {
-                                    if err.code.eq(&Some(-32602)) {
-                                        ("Self payment".to_string(), invoice.amount)
-                                    } else {
-                                        panic!()
+                    let invoice = match cln_response {
+                        cln_rpc::Response::Pay(pay_response) => (
+                            serde_json::to_string(&pay_response.payment_preimage).unwrap(),
+                            Amount::from(pay_response.amount_sent_msat.msat() / 1000),
+                        ),
+                        /*
+                                    Err(err) => {
+                                        if err.code.eq(&Some(-32602)) {
+                                            ("Self payment".to_string(), invoice.amount)
+                                        } else {
+                                            panic!()
+                                        }
                                     }
-                                }
-                    */
-                    _ => panic!(),
-                };
+                        */
+                        _ => panic!(),
+                    };
 
-                debug!("Invoice paid: {:?}", invoice);
+                    debug!("Invoice paid: {:?}", invoice);
+                }
+            }
+        });
+
+        tokio::select! {
+            _ = nostr_task => {
+                warn!("Nostr task ended");
+            }
+            _ = cashu_task => {
+                warn!("Cashu task ended");
+            }
+            _ = axum_task => {
+                warn!("Axum task ended");
+            }
+            _ = wait_invoice_task => {
+                warn!("Wait invoice task ended");
+
             }
         }
-    });
-
-    tokio::select! {
-        _ = nostr_task => {
-            warn!("Nostr task ended");
-        }
-        _ = cashu_task => {
-            warn!("Cashu task ended");
-        }
-        _ = axum_task => {
-            warn!("Axum task ended");
-        }
-        _ = wait_invoice_task => {
-            warn!("Wait invoice task ended");
-
+    } else {
+        tokio::select! {
+            _ = nostr_task => {
+                warn!("Nostr task ended");
+            }
+            _ = cashu_task => {
+                warn!("Cashu task ended");
+            }
+            _ = axum_task => {
+                warn!("Axum task ended");
+            }
         }
     }
 
@@ -408,67 +422,63 @@ async fn get_user_invoice(
     let mint = &user.mint;
     let amount = amount_from_msat(params.amount);
 
-    let pending_invoice = match state.proxy {
-        true => {
-            let client = state.cln_client.clone();
+    let pending_invoice = if state.proxy && user.proxy {
+        let client = state.cln_client.clone();
 
-            let cln_response = client
-                .lock()
-                .await
-                .as_mut()
-                .unwrap()
-                .call(cln_rpc::Request::Invoice(InvoiceRequest {
-                    amount_msat: AmountOrAny::Amount(CLN_Amount::from_sat(amount.to_sat())),
-                    description: params.nostr.clone().unwrap(),
-                    label: Uuid::new_v4().to_string(),
-                    expiry: None,
-                    fallbacks: None,
-                    preimage: None,
-                    cltv: None,
-                    deschashonly: Some(true),
-                }))
-                .await
-                .unwrap();
+        let cln_response = client
+            .lock()
+            .await
+            .as_mut()
+            .unwrap()
+            .call(cln_rpc::Request::Invoice(InvoiceRequest {
+                amount_msat: AmountOrAny::Amount(CLN_Amount::from_sat(amount.to_sat())),
+                description: params.nostr.clone().unwrap(),
+                label: Uuid::new_v4().to_string(),
+                expiry: None,
+                fallbacks: None,
+                preimage: None,
+                cltv: None,
+                deschashonly: Some(true),
+            }))
+            .await
+            .unwrap();
 
-            match cln_response {
-                cln_rpc::Response::Invoice(invoice_response) => {
-                    let invoice = Bolt11Invoice::from_str(&invoice_response.bolt11).unwrap();
-                    let pending_invoice = PendingInvoice::new(
-                        mint,
-                        &username,
-                        params.clone().nostr,
-                        amount_from_msat(params.amount),
-                        &invoice_response.payment_hash.to_string(),
-                        invoice,
-                        Some(unix_time()),
-                        true,
-                    );
-                    pending_invoice
-                }
-                _ => panic!("CLN returned wrong response kind"),
+        match cln_response {
+            cln_rpc::Response::Invoice(invoice_response) => {
+                let invoice = Bolt11Invoice::from_str(&invoice_response.bolt11).unwrap();
+                PendingInvoice::new(
+                    mint,
+                    &username,
+                    params.clone().nostr,
+                    amount_from_msat(params.amount),
+                    &invoice_response.payment_hash.to_string(),
+                    invoice,
+                    Some(unix_time()),
+                    true,
+                )
             }
+            _ => panic!("CLN returned wrong response kind"),
         }
-        false => {
-            let request_mint_response =
-                state
-                    .cashu
-                    .request_mint(amount, mint)
-                    .await
-                    .map_err(|err| {
-                        warn!("{:?}", err);
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    })?;
-            PendingInvoice::new(
-                mint,
-                &username,
-                params.nostr,
-                amount_from_msat(params.amount),
-                &request_mint_response.hash,
-                request_mint_response.pr.clone(),
-                None,
-                false,
-            )
-        }
+    } else {
+        let request_mint_response =
+            state
+                .cashu
+                .request_mint(amount, mint)
+                .await
+                .map_err(|err| {
+                    warn!("{:?}", err);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+        PendingInvoice::new(
+            mint,
+            &username,
+            params.nostr,
+            amount_from_msat(params.amount),
+            &request_mint_response.hash,
+            request_mint_response.pr.clone(),
+            None,
+            false,
+        )
     };
 
     state
@@ -508,11 +518,14 @@ async fn get_sign_up(
         vec![]
     };
 
+    let proxy = params.proxy.unwrap_or_default();
+
     let new_user = User {
         mint: params.mint,
         pubkey: params.pubkey.to_string(),
         // TODO: Get relays
         relays,
+        proxy,
     };
 
     state

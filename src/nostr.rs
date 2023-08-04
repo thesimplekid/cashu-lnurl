@@ -137,6 +137,7 @@ impl Nostr {
                                                     let updated_user = User {
                                                         mint: user_info.mint,
                                                         pubkey: user.pubkey,
+                                                        proxy: user.proxy,
                                                         relays,
                                                     };
 
@@ -173,6 +174,8 @@ impl Nostr {
                                                 let new_user = User {
                                                     mint: user_info.mint,
                                                     pubkey: event.pubkey.to_string(),
+                                                    // TODO: Need to change nostr to allow this be configured
+                                                    proxy: true,
                                                     relays,
                                                 };
 
@@ -217,7 +220,7 @@ impl Nostr {
             client
                 .send_direct_msg(
                     XOnlyPublicKey::from_str(&user.pubkey)?,
-                    self.sign_up_message(&username, &user),
+                    self.sign_up_message(username, user),
                 )
                 .await?;
         }

@@ -142,13 +142,13 @@ impl Cashu {
                 .mint_token(pending_invoice.amount, &pending_invoice.hash)
                 .await;
 
-            if let Ok(_) = &response {
+            if response.is_ok() {
                 // Token minting successful, break the loop and return the response
                 break;
             }
 
             // Wait for a while before retrying
-            sleep(Duration::from_secs(5)).await; // You can adjust the retry delay as needed
+            sleep(Duration::from_secs(5)).await;
         }
         Ok(response.unwrap())
     }
