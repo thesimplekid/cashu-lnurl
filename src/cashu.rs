@@ -135,12 +135,22 @@ impl Cashu {
     pub async fn mint(&self, pending_invoice: &PendingInvoice) -> Result<Token, Error> {
         let wallet = self.wallet_for_url(&pending_invoice.mint).await?;
 
-        let mint_response = wallet
-            .mint_token(pending_invoice.amount, &pending_invoice.hash)
-            .await
-            .unwrap();
+        let mut response: Result<Token, cashu_crab::error::wallet::Error>;
 
-        Ok(mint_response)
+        loop {
+            response = wallet
+                .mint_token(pending_invoice.amount, &pending_invoice.hash)
+                .await;
+
+            if let Ok(_) = &response {
+                // Token minting successful, break the loop and return the response
+                break;
+            }
+
+            // Wait for a while before retrying
+            sleep(Duration::from_secs(5)).await; // You can adjust the retry delay as needed
+        }
+        Ok(response.unwrap())
     }
 
     pub async fn add_pending_invoice(&self, pending_invoice: &PendingInvoice) -> Result<()> {

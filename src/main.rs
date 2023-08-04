@@ -4,6 +4,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -14,16 +15,19 @@ use axum::routing::get;
 use axum::{Json, Router};
 use cashu::Cashu;
 use cashu_crab::{Amount, Bolt11Invoice};
-use cln_rpc::model::{InvoiceRequest, PayRequest, WaitanyinvoiceRequest, WaitanyinvoiceResponse};
+use cln_rpc::model::{
+    requests::{InvoiceRequest, PayRequest, WaitanyinvoiceRequest},
+    responses::WaitanyinvoiceResponse,
+};
 use cln_rpc::primitives::{Amount as CLN_Amount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use database::Db;
 use dirs::data_dir;
 use futures::{Stream, StreamExt};
-use log::{debug, info, warn};
 use nostr_sdk::secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tracing::{debug, info, warn};
 use types::{as_msat, unix_time, PendingInvoice, User};
 use url::Url;
 use uuid::Uuid;
@@ -214,11 +218,24 @@ async fn main() -> anyhow::Result<()> {
                     .await
                     .unwrap();
 
+                println!("{:?}", cln_response);
+
+                // TODO: Handle self payment
+
                 let invoice = match cln_response {
                     cln_rpc::Response::Pay(pay_response) => (
                         serde_json::to_string(&pay_response.payment_preimage).unwrap(),
                         Amount::from(pay_response.amount_sent_msat.msat() / 1000),
                     ),
+                    /*
+                                Err(err) => {
+                                    if err.code.eq(&Some(-32602)) {
+                                        ("Self payment".to_string(), invoice.amount)
+                                    } else {
+                                        panic!()
+                                    }
+                                }
+                    */
                     _ => panic!(),
                 };
 
@@ -503,13 +520,14 @@ async fn get_sign_up(
         .add_user(&params.username, &new_user)
         .await
         .unwrap();
-    /*
-        state
-            .nostr
-            .send_sign_up_message(&params.username, &new_user)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    */
+    let nostr = state.nostr.clone();
+
+    let _ = thread::spawn(move || {
+        let _ = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(nostr.send_sign_up_message(&params.username, &new_user));
+    });
+
     Ok(StatusCode::OK)
 }
 
