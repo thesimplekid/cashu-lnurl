@@ -278,14 +278,33 @@ impl Nostr {
     ) -> Result<()> {
         let zap_request = Event::from_json(description)?;
 
+        let mut request_relays: HashSet<String> = zap_request
+            .tags
+            .iter()
+            .filter_map(|tag| match tag {
+                Tag::Relays(values) => Some(
+                    values
+                        .iter()
+                        .map(|value| value.to_string())
+                        .collect::<Vec<String>>(),
+                ),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+
+        debug!("req relays {:?}", request_relays);
+
+        request_relays.extend(relays.clone());
+
         if zap_request.kind.ne(&Kind::ZapRequest) {
             bail!("Description is not a zap request");
         }
 
         let zap_event =
             EventBuilder::new_zap(bolt11.to_string(), None, zap_request).to_event(&self.keys)?;
-
-        self.broadcast_event(relays, zap_event).await?;
+        debug!("{:?}", zap_event.as_json());
+        self.broadcast_event(&request_relays, zap_event).await?;
 
         Ok(())
     }

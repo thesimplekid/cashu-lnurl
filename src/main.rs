@@ -504,7 +504,7 @@ struct SignupParams {
     pubkey: XOnlyPublicKey,
     proxy: Option<bool>,
     mint: String,
-    relay: Option<String>,
+    relays: Option<HashSet<String>>,
 }
 
 async fn get_sign_up(
@@ -516,8 +516,8 @@ async fn get_sign_up(
         return Ok(StatusCode::CONFLICT);
     }
 
-    let relays = if let Some(relay) = params.relay {
-        HashSet::from_iter(vec![relay])
+    let relays = if let Some(relays) = params.relays {
+        relays
     } else {
         HashSet::new()
     };
@@ -527,7 +527,6 @@ async fn get_sign_up(
     let new_user = User {
         mint: params.mint,
         pubkey: params.pubkey.to_string(),
-        // TODO: Get relays
         relays,
         proxy,
     };
@@ -537,6 +536,7 @@ async fn get_sign_up(
         .add_user(&params.username, &new_user)
         .await
         .unwrap();
+
     let nostr = state.nostr.clone();
 
     let _ = thread::spawn(move || {
