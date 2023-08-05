@@ -2,8 +2,9 @@ use std::collections::HashSet;
 use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use cashu_crab::nuts::nut00::wallet::Token;
+use cashu_crab::Bolt11Invoice;
 use nostr_sdk::prelude::*;
 use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
@@ -66,7 +67,7 @@ impl Nostr {
         })
     }
 
-    async fn get_user_relays(client: &Client, pubkey: &str) -> Result<Vec<String>> {
+    async fn get_user_relays(client: &Client, pubkey: &str) -> Result<HashSet<String>> {
         let filter = Filter::new().author(pubkey).kind(Kind::ContactList);
 
         let events = client
@@ -74,7 +75,7 @@ impl Nostr {
             .await?;
         let most_recent = events.iter().max_by_key(|event| event.created_at);
 
-        let mut relays = vec![];
+        let mut relays = HashSet::new();
 
         if let Some(event) = most_recent {
             let content: Value = serde_json::from_str(&event.content)?;
@@ -265,6 +266,26 @@ impl Nostr {
                 .write_message(WsMessage::Text(msg))
                 .expect("Impossible to send message");
         }
+
+        Ok(())
+    }
+
+    pub async fn broadcast_zap(
+        &self,
+        bolt11: Bolt11Invoice,
+        description: &str,
+        relays: &HashSet<String>,
+    ) -> Result<()> {
+        let zap_request = Event::from_json(description)?;
+
+        if zap_request.kind.ne(&Kind::ZapRequest) {
+            bail!("Description is not a zap request");
+        }
+
+        let zap_event =
+            EventBuilder::new_zap(bolt11.to_string(), None, zap_request).to_event(&self.keys)?;
+
+        self.broadcast_event(relays, zap_event).await?;
 
         Ok(())
     }

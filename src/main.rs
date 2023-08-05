@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
@@ -516,9 +517,9 @@ async fn get_sign_up(
     }
 
     let relays = if let Some(relay) = params.relay {
-        vec![relay]
+        HashSet::from_iter(vec![relay])
     } else {
-        vec![]
+        HashSet::new()
     };
 
     let proxy = params.proxy.unwrap_or_default();

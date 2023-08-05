@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::{collections::HashSet, time::SystemTime};
 
 use cashu_crab::{Amount, Bolt11Invoice};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -22,7 +22,7 @@ pub struct User {
     /// Nostr Pubkey
     pub pubkey: String,
     /// Nostr Relays
-    pub relays: Vec<String>,
+    pub relays: HashSet<String>,
     /// Proxy Invoice to mint
     pub proxy: bool,
 }

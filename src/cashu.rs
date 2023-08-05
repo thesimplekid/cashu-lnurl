@@ -79,15 +79,25 @@ impl Cashu {
                             if let Some(user) = user {
                                 cashu
                                     .nostr
-                                    .send_token(
-                                        &user.pubkey,
-                                        token,
-                                        &user.relays.into_iter().collect(),
-                                    )
+                                    .send_token(&user.pubkey, token, &user.relays)
                                     .await?;
-                            }
 
-                            // TODO: If proxy is true broadcast zap
+                                if invoice.proxied {
+                                    if let Some(description) = invoice.description {
+                                        if let Err(err) = self
+                                            .nostr
+                                            .broadcast_zap(
+                                                invoice.bolt11,
+                                                &description,
+                                                &user.relays,
+                                            )
+                                            .await
+                                        {
+                                            warn!("Could not broadcast zap: {}", err);
+                                        }
+                                    }
+                                }
+                            }
 
                             // Remove token from pending
                             cashu.db.remove_pending_invoice(&invoice.hash).await?;
