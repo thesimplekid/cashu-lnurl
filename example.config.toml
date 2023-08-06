@@ -1,16 +1,23 @@
 [info]
+# Url of service
+url = "https://example.com"
 # Nostr Nsec
 nostr_nsec = "<>"
 # Default mint
 mint = "https://8333.space:3338"
 # Default relays to publish and read from
 #relays=["wss://relay.damus.io", "wss://nostr.oxtr.dev"]
-# Optional Invoice Description
-# invoice_description=""
+
+db_path = "/home/thesimplekid/Documents/Development/cashu-lnurl"
+
+# If enabled proxy invoices through service cln
+# this is required to set invoices description for zaps
+# proxy = false
+# cln_path = "/home/thesimplekid/.lightning/signet/lightning-rpc"
 
 [network]
 # Bind to this network address
-address = "0.0.0.0"
+address = "127.0.0.1"
 
 # Listen on this port
 port = 8080

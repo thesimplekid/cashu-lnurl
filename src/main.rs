@@ -52,10 +52,7 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = config::Settings::new(&Some("./config.toml".to_string()));
 
-    print!("{:?}", settings);
-
     let api_base_address = Url::from_str(&settings.info.url)?;
-    let rpc_socket = settings.info.cln_path.clone().unwrap();
     let description = match settings.info.invoice_description {
         Some(des) => des,
         None => "Hello World".to_string(),
@@ -79,7 +76,6 @@ async fn main() -> anyhow::Result<()> {
 
     let db = Db::new(db_path).await?;
 
-    println!("db created");
     let nostr = Nostr::new(
         db.clone(),
         api_base_address.to_string(),
@@ -137,6 +133,12 @@ async fn main() -> anyhow::Result<()> {
     // DM tokens to user
 
     if settings.info.proxy {
+        let rpc_socket = settings
+            .info
+            .cln_path
+            .clone()
+            .expect("CLN RPC socket path required");
+
         let wait_invoice_task = tokio::spawn(async move {
             // Get pay index file path from cln config if set
             // if not set to default
@@ -220,10 +222,6 @@ async fn main() -> anyhow::Result<()> {
                         }))
                         .await
                         .unwrap();
-
-                    println!("{:?}", cln_response);
-
-                    // TODO: Handle self payment
 
                     let invoice = match cln_response {
                         cln_rpc::Response::Pay(pay_response) => (
@@ -512,7 +510,6 @@ async fn get_sign_up(
     State(state): State<LnurlState>,
 ) -> Result<StatusCode, StatusCode> {
     if let Ok(Some(_)) = state.db.get_user(&params.username).await {
-        println!("{:?}", state.db.get_user(&params.username).await);
         return Ok(StatusCode::CONFLICT);
     }
 
