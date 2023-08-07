@@ -10,10 +10,15 @@ mint = "https://8333.space:3338"
 
 db_path = "/home/thesimplekid/Documents/Development/cashu-lnurl"
 
+
 # If enabled proxy invoices through service cln
 # this is required to set invoices description for zaps
 # proxy = false
 # cln_path = "/home/thesimplekid/.lightning/signet/lightning-rpc"
+
+# Pay index path
+# Optinal defaults to data directory
+# pay_index_path = ""
 
 [network]
 # Bind to this network address

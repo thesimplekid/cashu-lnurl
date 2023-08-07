@@ -140,10 +140,10 @@ async fn main() -> anyhow::Result<()> {
             .expect("CLN RPC socket path required");
 
         let wait_invoice_task = tokio::spawn(async move {
-            // Get pay index file path from cln config if set
-            // if not set to default
-            // TODO:
-            let pay_index_path = index_file_path().unwrap();
+            let pay_index_path = match settings.info.pay_index_path {
+                Some(path) => path,
+                None => index_file_path().expect("Could not get path to pay index file"),
+            };
 
             let last_pay_index = match read_last_pay_index(&pay_index_path) {
                 Ok(idx) => idx,

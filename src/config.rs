@@ -26,7 +26,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 use config::{Config, ConfigError, File};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ pub struct Info {
     pub proxy: bool,
     pub cln_path: Option<String>,
     pub db_path: Option<String>,
+    pub pay_index_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
