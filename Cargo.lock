@@ -61,6 +61,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-utility"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3716c0d3970fe92d79a8f4cda2caf91113574505dff5b18e455e549d4b078e98"
+dependencies = [
+ "futures-util",
+ "gloo-timers",
+ "tokio",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "async_io_stream"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -278,7 +290,7 @@ checksum = "89b2fd2a0dcf38d7971e2194b6b6eebab45ae01067456a7fd93d5547a61b70be"
 [[package]]
 name = "cashu-crab"
 version = "0.4.0-ALPHA"
-source = "git+https://github.com/thesimplekid/cashu-crab#04fe004a4b7f94af1c5c0453d8dad845a1ddb27a"
+source = "git+https://github.com/thesimplekid/cashu-crab?rev=04fe004a4b7f94af1c5c0453d8dad845a1ddb27a#04fe004a4b7f94af1c5c0453d8dad845a1ddb27a"
 dependencies = [
  "base64 0.21.2",
  "bitcoin 0.30.1",
@@ -317,7 +329,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "tungstenite",
+ "tungstenite 0.19.0",
  "url",
  "uuid",
 ]
@@ -1179,8 +1191,9 @@ dependencies = [
 
 [[package]]
 name = "nostr"
-version = "0.22.0"
-source = "git+https://github.com/rust-nostr/nostr?rev=eced782#eced782b48b8e38fb6b53146522273e074309e20"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525a8f75106f4eeb1fedaacadc61547548fe4715c3edde7d03eed2900b467952"
 dependencies = [
  "aes",
  "base64 0.21.2",
@@ -1189,31 +1202,32 @@ dependencies = [
  "cbc",
  "getrandom",
  "instant",
- "log",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
+ "tracing",
  "url",
 ]
 
 [[package]]
 name = "nostr-sdk"
-version = "0.22.0"
-source = "git+https://github.com/rust-nostr/nostr?rev=eced782#eced782b48b8e38fb6b53146522273e074309e20"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d97f949e4e303d07e8cb92dff5896da922b906133c8b75b570fd3ec93b782430"
 dependencies = [
- "gloo-timers",
- "log",
+ "async-utility",
  "nostr",
  "nostr-sdk-net",
  "thiserror",
  "tokio",
- "wasm-bindgen-futures",
+ "tracing",
 ]
 
 [[package]]
 name = "nostr-sdk-net"
-version = "0.22.0"
-source = "git+https://github.com/rust-nostr/nostr?rev=eced782#eced782b48b8e38fb6b53146522273e074309e20"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "626d104f310b7360f904945f82339135529686b936abd89e220aaa2bc9704746"
 dependencies = [
  "futures-util",
  "thiserror",
@@ -1222,8 +1236,7 @@ dependencies = [
  "tokio-socks",
  "tokio-tungstenite",
  "url",
- "webpki",
- "webpki-roots 0.23.1",
+ "webpki-roots 0.25.2",
  "ws_stream_wasm",
 ]
 
@@ -2012,16 +2025,16 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec509ac96e9a0c43427c74f003127d953a265737636129424288d27cb5c4b12c"
+checksum = "2b2dbec703c26b00d74844519606ef15d09a7d6857860f84ad223dec002ddea2"
 dependencies = [
  "futures-util",
  "log",
  "rustls 0.21.6",
  "tokio",
  "tokio-rustls",
- "tungstenite",
+ "tungstenite 0.20.0",
  "webpki-roots 0.23.1",
 ]
 
@@ -2178,6 +2191,26 @@ dependencies = [
  "utf-8",
  "webpki",
  "webpki-roots 0.23.1",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e862a1c4128df0112ab625f55cd5c934bcb4312ba80b39ae4b4835a3fd58e649"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand",
+ "rustls 0.21.6",
+ "sha1",
+ "thiserror",
+ "url",
+ "utf-8",
 ]
 
 [[package]]
@@ -2376,6 +2409,12 @@ checksum = "b03058f88386e5ff5310d9111d53f48b17d732b401aeb83a8d5190f2ac459338"
 dependencies = [
  "rustls-webpki 0.100.1",
 ]
+
+[[package]]
+name = "webpki-roots"
+version = "0.25.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14247bb57be4f377dfb94c72830b8ce8fc6beac03cf4bf7b9732eadd414123fc"
 
 [[package]]
 name = "winapi"

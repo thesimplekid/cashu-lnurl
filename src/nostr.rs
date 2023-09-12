@@ -55,7 +55,7 @@ impl Nostr {
         let keys = Self::handle_keys(private_key)?;
 
         let client = Client::new(&keys);
-        let nostr_relays = relays.iter().map(|url| (url, None)).collect();
+        let nostr_relays = relays.iter().map(|url| (url.to_string(), None)).collect();
         client.add_relays(nostr_relays).await?;
 
         Ok(Self {
@@ -153,6 +153,7 @@ impl Nostr {
                                                         .send_direct_msg(
                                                             event.pubkey,
                                                             "Mints and Relays updated",
+                                                            None,
                                                         )
                                                         .await?;
                                                 } else {
@@ -160,6 +161,7 @@ impl Nostr {
                                                         .send_direct_msg(
                                                             event.pubkey,
                                                             "Username already taken",
+                                                            None,
                                                         )
                                                         .await?;
                                                 }
@@ -191,6 +193,7 @@ impl Nostr {
                                                             &user_info.username,
                                                             &new_user,
                                                         ),
+                                                        None,
                                                     )
                                                     .await?;
                                             }
@@ -222,6 +225,7 @@ impl Nostr {
                 .send_direct_msg(
                     XOnlyPublicKey::from_str(&user.pubkey)?,
                     self.sign_up_message(username, user),
+                    None,
                 )
                 .await?;
         }
@@ -240,6 +244,7 @@ impl Nostr {
             &self.keys,
             receiver,
             token.convert_to_string()?,
+            None,
         )?
         .to_event(&self.keys)?;
 
@@ -301,8 +306,8 @@ impl Nostr {
             bail!("Description is not a zap request");
         }
 
-        let zap_event =
-            EventBuilder::new_zap(bolt11.to_string(), None, zap_request).to_event(&self.keys)?;
+        let zap_event = EventBuilder::new_zap_receipt(bolt11.to_string(), None, zap_request)
+            .to_event(&self.keys)?;
         debug!("{:?}", zap_event.as_json());
         self.broadcast_event(&request_relays, zap_event).await?;
 
