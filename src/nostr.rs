@@ -268,7 +268,7 @@ impl Nostr {
             // Send msg
             let msg = ClientMessage::new_event(event.clone()).as_json();
             socket
-                .write_message(WsMessage::Text(msg))
+                .send(WsMessage::Text(msg))
                 .expect("Impossible to send message");
         }
 

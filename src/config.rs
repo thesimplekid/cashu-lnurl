@@ -41,6 +41,7 @@ pub struct Info {
     pub invoice_description: Option<String>,
     pub proxy: bool,
     pub cln_path: Option<String>,
+    pub zapper: Option<bool>,
     pub db_path: Option<String>,
     pub pay_index_path: Option<PathBuf>,
 }

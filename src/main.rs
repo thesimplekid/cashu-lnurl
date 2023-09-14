@@ -16,6 +16,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use cashu::Cashu;
 use cashu_crab::{Amount, Bolt11Invoice};
+use clap::Parser;
 use cln_rpc::model::{
     requests::{InvoiceRequest, PayRequest, WaitanyinvoiceRequest},
     responses::WaitanyinvoiceResponse,
@@ -33,10 +34,13 @@ use types::{as_msat, unix_time, PendingInvoice, User};
 use url::Url;
 use uuid::Uuid;
 
+use crate::cli::CLIArgs;
+use crate::config::{Info, Network, Settings};
 use crate::nostr::Nostr;
 use crate::utils::amount_from_msat;
 
 mod cashu;
+mod cli;
 mod config;
 mod database;
 mod error;
@@ -50,7 +54,66 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    let settings = config::Settings::new(&Some("./config.toml".to_string()));
+    let args = CLIArgs::parse();
+
+    let config_file_settings = config::Settings::new(&Some("./config.toml".to_string()));
+
+    let url = match args.url {
+        Some(url) => url,
+        None => config_file_settings.info.url,
+    };
+
+    let mint = args.mint.unwrap_or(config_file_settings.info.mint);
+
+    let invoice_description = args
+        .invoice_description
+        .or(config_file_settings.info.invoice_description);
+
+    let nostr_nsec = match args.nsec {
+        Some(nsec) => Some(nsec),
+        None => config_file_settings.info.nostr_nsec,
+    };
+
+    let relays = if args.relays.is_empty() {
+        config_file_settings.info.relays
+    } else {
+        args.relays.into_iter().collect()
+    };
+
+    let db_path = args.db_path.or(config_file_settings.info.db_path);
+
+    let proxy = args.proxy.unwrap_or(config_file_settings.info.proxy);
+
+    let cln_path = args.cln_path.or(config_file_settings.info.cln_path);
+
+    let zapper = Some(
+        args.zapper
+            .unwrap_or(config_file_settings.info.zapper.unwrap_or_default()),
+    );
+
+    let pay_index_path = args
+        .pay_index_path
+        .or(config_file_settings.info.pay_index_path);
+
+    let address = args.address.unwrap_or(config_file_settings.network.address);
+
+    let port = args.port.unwrap_or(config_file_settings.network.port);
+
+    let settings = Settings {
+        info: Info {
+            url,
+            nostr_nsec,
+            relays,
+            mint,
+            invoice_description,
+            proxy,
+            cln_path,
+            zapper,
+            db_path,
+            pay_index_path,
+        },
+        network: Network { port, address },
+    };
 
     let api_base_address = Url::from_str(&settings.info.url)?;
     let description = match settings.info.invoice_description {
