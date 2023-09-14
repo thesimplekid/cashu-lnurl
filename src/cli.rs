@@ -16,7 +16,7 @@ pub struct CLIArgs {
     #[arg(
         short,
         long,
-        help = "Deafult Nostr realys to publish",
+        help = "Default Nostr realys to publish",
         action = clap::ArgAction::Append, required = false
     )]
     pub relays: Vec<String>,
@@ -25,7 +25,7 @@ pub struct CLIArgs {
     #[arg(
         short,
         long,
-        help = "Wheather or not to proxy ln invoice",
+        help = "Whether or not to proxy ln invoice",
         required = false
     )]
     pub proxy: Option<bool>,
