@@ -180,6 +180,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/.well-known/lnurlp/:username", get(get_user_lnurl_struct))
         .route("/lnurlp/:username/invoice", get(get_user_invoice))
         .route("/signup", get(get_sign_up))
+        .route("/hello", get(get_hello_world))
         .with_state(state);
 
     let address = settings.network.address;
@@ -557,6 +558,10 @@ async fn get_user_invoice(
         success_action: None,
         routes: vec![],
     }))
+}
+
+async fn get_hello_world() -> String {
+    "Hello World".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
