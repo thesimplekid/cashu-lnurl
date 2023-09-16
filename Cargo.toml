@@ -9,7 +9,7 @@ rust-version = "1.67.0" #MSRV
 [dependencies]
 anyhow = "1.0.71"
 axum = "0.6.18"
-cashu-sdk = { git = "https://github.com/thesimplekid/cashu-crab", rev = "0013e040d6f561d29c0908e9b940da90c983aa90", default-features = false, features = ["wallet"] }
+cashu-sdk = { git = "https://github.com/thesimplekid/cashu-crab", rev = "5f7063fbd3b291d6813d6b06cb613e3e08eed968", default-features = false, features = ["wallet"] }
 clap = { version = "=4.2.7", features = ["env", "default", "derive"] }
 # cln-rpc = { git = "https://github.com/ElementsProject/lightning" }
 cln-rpc = "0.1.3"
