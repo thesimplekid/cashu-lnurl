@@ -232,10 +232,11 @@ async fn main() -> anyhow::Result<()> {
                 // If it is request mint from selected mint
                 if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
                     // Fee to account for routing fee
-                    let fee = Amount::from_sat((invoice.amount.to_sat() as f32 * 0.01).ceil() as u64);
-                    
+                    let fee =
+                        Amount::from_sat((invoice.amount.to_sat() as f32 * 0.01).ceil() as u64);
+
                     let amount = invoice.amount - fee;
-                    
+
                     let request_mint_response = cashu
                         .request_mint(amount, &invoice.mint)
                         .await
@@ -291,12 +292,13 @@ async fn main() -> anyhow::Result<()> {
 
                     match cln_response {
                         Ok(cln_rpc::Response::Pay(pay_response)) => {
-                            let pay_response = serde_json::to_string(&pay_response.payment_preimage).unwrap();
+                            let pay_response =
+                                serde_json::to_string(&pay_response.payment_preimage).unwrap();
                             // let invoice = Amount::from_msat(pay_response.amount_sent_msat.msat());
                             debug!("Invoice paid: {:?}", pay_response);
-                        },
+                        }
                         Ok(res) => warn!("Wrong CLN response: {:?}", res),
-                        Err(err) => warn!("Error paying mint invoice: {:?}", err)
+                        Err(err) => warn!("Error paying mint invoice: {:?}", err),
                     };
                 }
             }
