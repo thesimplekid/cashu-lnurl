@@ -231,8 +231,13 @@ async fn main() -> anyhow::Result<()> {
                 // Check if invoice is in db and proxied
                 // If it is request mint from selected mint
                 if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
+                    // Fee to account for routing fee
+                    let fee = Amount::from_sat((invoice.amount.to_sat() as f32 * 0.01).ceil() as u64);
+                    
+                    let amount = invoice.amount - fee;
+                    
                     let request_mint_response = cashu
-                        .request_mint(invoice.amount, &invoice.mint)
+                        .request_mint(amount, &invoice.mint)
                         .await
                         .map_err(|err| {
                             warn!("{:?}", err);
@@ -279,31 +284,20 @@ async fn main() -> anyhow::Result<()> {
                             exemptfee: None,
                             localinvreqid: None,
                             exclude: None,
-                            // TODO: handle fees
-                            maxfee: None,
+                            maxfee: Some(CLN_Amount::from_sat(fee.to_sat())),
                             description: None,
                         }))
-                        .await
-                        .unwrap();
+                        .await;
 
-                    let invoice = match cln_response {
-                        cln_rpc::Response::Pay(pay_response) => (
-                            serde_json::to_string(&pay_response.payment_preimage).unwrap(),
-                            Amount::from(pay_response.amount_sent_msat.msat() / 1000),
-                        ),
-                        /*
-                                    Err(err) => {
-                                        if err.code.eq(&Some(-32602)) {
-                                            ("Self payment".to_string(), invoice.amount)
-                                        } else {
-                                            panic!()
-                                        }
-                                    }
-                        */
-                        _ => panic!(),
+                    match cln_response {
+                        Ok(cln_rpc::Response::Pay(pay_response)) => {
+                            let pay_response = serde_json::to_string(&pay_response.payment_preimage).unwrap();
+                            // let invoice = Amount::from_msat(pay_response.amount_sent_msat.msat());
+                            debug!("Invoice paid: {:?}", pay_response);
+                        },
+                        Ok(res) => warn!("Wrong CLN response: {:?}", res),
+                        Err(err) => warn!("Error paying mint invoice: {:?}", err)
                     };
-
-                    debug!("Invoice paid: {:?}", invoice);
                 }
             }
         });
