@@ -348,7 +348,7 @@ checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 [[package]]
 name = "cashu"
 version = "0.4.1-ALPHA"
-source = "git+https://github.com/thesimplekid/cashu-crab?rev=544a8d1f910e9f56f95e6844d604ef90ba81294c#544a8d1f910e9f56f95e6844d604ef90ba81294c"
+source = "git+https://github.com/thesimplekid/cashu-crab?rev=0013e040d6f561d29c0908e9b940da90c983aa90#0013e040d6f561d29c0908e9b940da90c983aa90"
 dependencies = [
  "base64 0.21.4",
  "bitcoin 0.30.1",
@@ -393,7 +393,7 @@ dependencies = [
 [[package]]
 name = "cashu-sdk"
 version = "0.1.0"
-source = "git+https://github.com/thesimplekid/cashu-crab?rev=544a8d1f910e9f56f95e6844d604ef90ba81294c#544a8d1f910e9f56f95e6844d604ef90ba81294c"
+source = "git+https://github.com/thesimplekid/cashu-crab?rev=0013e040d6f561d29c0908e9b940da90c983aa90#0013e040d6f561d29c0908e9b940da90c983aa90"
 dependencies = [
  "cashu",
  "futures-util",
@@ -2122,9 +2122,9 @@ checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
 name = "syn"
-version = "2.0.33"
+version = "2.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9caece70c63bfba29ec2fed841a09851b14a235c60010fa4de58089b6c025668"
+checksum = "59bf04c28bee9043ed9ea1e41afc0552288d3aba9c6efdd78903b802926f4879"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2409,9 +2409,9 @@ dependencies = [
 
 [[package]]
 name = "typenum"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "497961ef93d974e23eb6f433eb5fe1b7930b659f06d12dec6fc44a8f554c0bba"
+checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
 name = "ucd-trie"
