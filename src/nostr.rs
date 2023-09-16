@@ -3,8 +3,8 @@ use std::time::Duration;
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::{bail, Result};
-use cashu_crab::nuts::nut00::wallet::Token;
-use cashu_crab::Bolt11Invoice;
+use cashu_sdk::nuts::nut00::wallet::Token;
+use cashu_sdk::Bolt11Invoice;
 use nostr_sdk::prelude::*;
 use tokio::sync::Mutex;
 use tracing::{debug, error, warn};

@@ -1,9 +1,7 @@
 use std::{collections::HashSet, time::SystemTime};
 
-use cashu_crab::{Amount, Bolt11Invoice};
+use cashu_sdk::{Amount, Bolt11Invoice};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-use crate::utils::{amount_from_msat, msat_from_amount};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSignUp {
@@ -83,7 +81,7 @@ pub mod as_msat {
     where
         S: Serializer,
     {
-        let msats = msat_from_amount(amount);
+        let msats = amount.to_msat();
         msats.serialize(serializer)
     }
 
@@ -92,6 +90,6 @@ pub mod as_msat {
         D: Deserializer<'de>,
     {
         let msat = u64::deserialize(deserializer)?;
-        Ok(amount_from_msat(msat))
+        Ok(Amount::from_msat(msat))
     }
 }

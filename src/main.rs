@@ -15,7 +15,7 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use cashu::Cashu;
-use cashu_crab::{Amount, Bolt11Invoice};
+use cashu_sdk::{Amount, Bolt11Invoice};
 use clap::Parser;
 use cln_rpc::model::{
     requests::{InvoiceRequest, PayRequest, WaitanyinvoiceRequest},
@@ -37,7 +37,6 @@ use uuid::Uuid;
 use crate::cli::CLIArgs;
 use crate::config::{Info, Network, Settings};
 use crate::nostr::Nostr;
-use crate::utils::amount_from_msat;
 
 mod cashu;
 mod cli;
@@ -46,7 +45,6 @@ mod database;
 mod error;
 mod nostr;
 mod types;
-mod utils;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -479,7 +477,7 @@ async fn get_user_invoice(
     };
 
     let mint = &user.mint;
-    let amount = amount_from_msat(params.amount);
+    let amount = Amount::from_msat(params.amount);
 
     let pending_invoice = if state.proxy && user.proxy {
         let client = state.cln_client.clone();
@@ -509,7 +507,7 @@ async fn get_user_invoice(
                     mint: mint.to_string(),
                     username,
                     description: params.clone().nostr,
-                    amount: amount_from_msat(params.amount),
+                    amount: Amount::from_msat(params.amount),
                     time: unix_time(),
                     hash: invoice_response.payment_hash.to_string(),
                     bolt11: invoice,
@@ -533,7 +531,7 @@ async fn get_user_invoice(
             mint: mint.to_string(),
             username,
             description: params.nostr,
-            amount: amount_from_msat(params.amount),
+            amount: Amount::from_msat(params.amount),
             hash: request_mint_response.hash,
             bolt11: request_mint_response.pr,
             last_checked: None,

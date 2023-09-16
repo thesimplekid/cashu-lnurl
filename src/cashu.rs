@@ -1,10 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
-use cashu_crab::nuts::nut00::wallet::Token;
-use cashu_crab::nuts::nut03::RequestMintResponse;
-use cashu_crab::wallet::Wallet as CashuWallet;
-use cashu_crab::{client::Client, Amount};
+use cashu_sdk::nuts::nut00::wallet::Token;
+use cashu_sdk::nuts::nut03::RequestMintResponse;
+use cashu_sdk::wallet::Wallet as CashuWallet;
+use cashu_sdk::{client::Client, Amount};
 use tokio::{
     sync::Mutex,
     time::{sleep, Duration},
