@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
             .info
             .max_sendable
             .map(|a| a)
-            .unwrap_or(Amount::from_sat(1)),
+            .unwrap_or(Amount::from_sat(1000000)),
     );
 
     let min_sendable: Amount = args.max_sendable.map(|m| Amount::from_sat(m)).unwrap_or(
@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
             .info
             .min_sendable
             .map(|a| a)
-            .unwrap_or(Amount::from_sat(1000000)),
+            .unwrap_or(Amount::from_sat(1)),
     );
 
     let db_path = args.db_path.or(config_file_settings.info.db_path);
