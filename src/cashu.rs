@@ -128,7 +128,7 @@ impl Cashu {
     ) -> Result<RequestMintResponse, Error> {
         let wallet = self.wallet_for_url(mint_url).await?;
         debug!("Got wallet");
-        let invoice = wallet.request_mint(amount).await.unwrap();
+        let invoice = wallet.request_mint(amount).await?;
 
         Ok(invoice)
     }

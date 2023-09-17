@@ -130,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
     let db_path = match settings.info.db_path {
         Some(path) => PathBuf::from_str(&path)?,
         None => {
-            let data_dir = dirs::data_dir().unwrap();
+            let data_dir = dirs::data_dir().ok_or(anyhow!("Could not get data dir".to_string()))?;
             data_dir.join("cashu-lnurl")
         }
     };
@@ -153,9 +153,11 @@ async fn main() -> anyhow::Result<()> {
     let cashu_clone = cashu.clone();
     let cashu_task = tokio::spawn(async move { cashu_clone.run().await });
 
-    let cln_client = Arc::new(Mutex::new(Some(
-        ClnRpc::new(settings.info.cln_path.clone().unwrap()).await?,
-    )));
+    let cln_client = if let Some(cln_path) = settings.info.cln_path.clone() {
+        Arc::new(Mutex::new(Some(ClnRpc::new(cln_path).await?)))
+    } else {
+        Arc::new(Mutex::new(None))
+    };
 
     let db_clone = db.clone();
     let cashu_clone = cashu.clone();
@@ -163,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = LnurlState {
         api_base_address,
-        min_sendable: Amount::from_sat(0),
+        min_sendable: Amount::from_sat(1),
         max_sendable: Amount::from_sat(1000000),
         description,
         nostr_pubkey: Some(nostr.get_pubkey()),

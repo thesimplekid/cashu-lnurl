@@ -21,10 +21,10 @@ impl Db {
         if let Err(err) = fs::create_dir_all(&path) {
             warn!("Could not create db path {:?}", err);
         }
-        let db_path = path.join("cashu-lnurl.redb");
-        let database = Database::create(db_path).unwrap();
 
-        let write_txn = database.begin_write().unwrap();
+        let database = Database::create(path)?;
+
+        let write_txn = database.begin_write()?;
         {
             let _ = write_txn.open_table(USERS)?;
             let _ = write_txn.open_table(PENDING)?;
