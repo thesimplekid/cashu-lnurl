@@ -54,7 +54,10 @@ async fn main() -> anyhow::Result<()> {
 
     let args = CLIArgs::parse();
 
-    let config_file_settings = config::Settings::new(&Some("./config.toml".to_string()));
+    let config_file_settings = match args.config {
+        Some(config_path) => config::Settings::new(&Some(config_path)),
+        None => Settings::default(),
+    };
 
     let url = match args.url {
         Some(url) => url,

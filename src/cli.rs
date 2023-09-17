@@ -5,6 +5,8 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(about = "A service to dm cashu tokens for lnurl address", author = env!("CARGO_PKG_AUTHORS"), version = env!("CARGO_PKG_VERSION"))]
 pub struct CLIArgs {
+    #[arg(short, help = "path to config file", required = false)]
+    pub config: Option<String>,
     #[arg(short, long, help = "Url of service", required = false)]
     pub url: Option<String>,
     #[arg(short, long, help = "Default Mint", required = false)]
