@@ -33,6 +33,10 @@ pub struct CLIArgs {
     pub proxy: Option<bool>,
     #[arg(short, long, help = "cln path", required = false)]
     pub cln_path: Option<String>,
+    #[arg(long, help = "Min Sendable in sats", required = false)]
+    pub min_sendable: Option<u64>,
+    #[arg(long, help = "Max Sendable in sats", required = false)]
+    pub max_sendable: Option<u64>,
     #[arg(short, long, help = "Publish Zaps", required = false)]
     pub zapper: Option<bool>,
     #[arg(long, help = "Pay index path", required = false)]

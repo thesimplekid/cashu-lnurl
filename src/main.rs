@@ -81,6 +81,22 @@ async fn main() -> anyhow::Result<()> {
         args.relays.into_iter().collect()
     };
 
+    let max_sendable: Amount = args.max_sendable.map(|m| Amount::from_sat(m)).unwrap_or(
+        config_file_settings
+            .info
+            .max_sendable
+            .map(|a| a)
+            .unwrap_or(Amount::from_sat(1)),
+    );
+
+    let min_sendable: Amount = args.max_sendable.map(|m| Amount::from_sat(m)).unwrap_or(
+        config_file_settings
+            .info
+            .min_sendable
+            .map(|a| a)
+            .unwrap_or(Amount::from_sat(1000000)),
+    );
+
     let db_path = args.db_path.or(config_file_settings.info.db_path);
 
     let proxy = args.proxy.unwrap_or(config_file_settings.info.proxy);
@@ -109,6 +125,8 @@ async fn main() -> anyhow::Result<()> {
             invoice_description,
             proxy,
             cln_path,
+            min_sendable: Some(min_sendable),
+            max_sendable: Some(max_sendable),
             zapper,
             db_path,
             pay_index_path,
@@ -168,8 +186,8 @@ async fn main() -> anyhow::Result<()> {
 
     let state = LnurlState {
         api_base_address,
-        min_sendable: Amount::from_sat(1),
-        max_sendable: Amount::from_sat(1000000),
+        min_sendable,
+        max_sendable,
         description,
         nostr_pubkey: Some(nostr.get_pubkey()),
         proxy: settings.info.proxy,

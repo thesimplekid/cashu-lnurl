@@ -28,6 +28,7 @@ THE SOFTWARE.
 
 use std::{collections::HashSet, path::PathBuf};
 
+use cashu_sdk::Amount;
 use config::{Config, ConfigError, File};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
@@ -44,6 +45,8 @@ pub struct Info {
     pub zapper: Option<bool>,
     pub db_path: Option<String>,
     pub pay_index_path: Option<PathBuf>,
+    pub min_sendable: Option<Amount>,
+    pub max_sendable: Option<Amount>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
