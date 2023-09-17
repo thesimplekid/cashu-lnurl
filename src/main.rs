@@ -29,7 +29,7 @@ use futures::{Stream, StreamExt};
 use nostr_sdk::secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use types::{as_msat, unix_time, PendingInvoice, User};
 use url::Url;
 use uuid::Uuid;
@@ -258,14 +258,14 @@ async fn main() -> anyhow::Result<()> {
 
                     let amount = invoice.amount - fee;
 
-                    let request_mint_response = cashu
-                        .request_mint(amount, &invoice.mint)
-                        .await
-                        .map_err(|err| {
-                            warn!("{:?}", err);
-                            StatusCode::INTERNAL_SERVER_ERROR
-                        })
-                        .unwrap();
+                    let request_mint_response =
+                        match cashu.request_mint(amount, &invoice.mint).await {
+                            Ok(res) => res,
+                            Err(err) => {
+                                warn!("{:?}", err);
+                                continue;
+                            }
+                        };
 
                     let pending_invoice = PendingInvoice {
                         mint: invoice.mint,
@@ -280,14 +280,14 @@ async fn main() -> anyhow::Result<()> {
                     };
 
                     // Add mint pending ivoice to DB
-                    cashu
-                        .add_pending_invoice(&pending_invoice)
-                        .await
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
-                        .unwrap();
+                    if let Err(err) = cashu.add_pending_invoice(&pending_invoice).await {
+                        warn!("Could not add pending invoice: {:?}", err)
+                    }
 
                     // Remove paid invoice from pending
-                    db.remove_pending_invoice(&invoice.hash).await.unwrap();
+                    if let Err(err) = db.remove_pending_invoice(&invoice.hash).await {
+                        warn!("Could not remove pending invoice {:?}", err);
+                    }
 
                     // Pay mint invoice
                     let mut cln_client = cln_client.lock().await;
@@ -313,10 +313,12 @@ async fn main() -> anyhow::Result<()> {
 
                     match cln_response {
                         Ok(cln_rpc::Response::Pay(pay_response)) => {
-                            let pay_response =
-                                serde_json::to_string(&pay_response.payment_preimage).unwrap();
-                            // let invoice = Amount::from_msat(pay_response.amount_sent_msat.msat());
-                            debug!("Invoice paid: {:?}", pay_response);
+                            if let Ok(pay_response) =
+                                serde_json::to_string(&pay_response.payment_preimage)
+                            {
+                                // let invoice = Amount::from_msat(pay_response.amount_sent_msat.msat());
+                                debug!("Invoice paid: {:?}", pay_response);
+                            }
                         }
                         Ok(res) => warn!("Wrong CLN response: {:?}", res),
                         Err(err) => warn!("Error paying mint invoice: {:?}", err),
@@ -520,13 +522,12 @@ async fn get_user_invoice(
                 cltv: None,
                 deschashonly: Some(true),
             }))
-            .await
-            .unwrap();
+            .await;
 
         match cln_response {
-            cln_rpc::Response::Invoice(invoice_response) => {
+            Ok(cln_rpc::Response::Invoice(invoice_response)) => {
                 let invoice = Bolt11Invoice::from_str(&invoice_response.bolt11).unwrap();
-                PendingInvoice {
+                let pending_invoice = PendingInvoice {
                     mint: mint.to_string(),
                     username,
                     description: params.clone().nostr,
@@ -536,9 +537,22 @@ async fn get_user_invoice(
                     bolt11: invoice,
                     last_checked: Some(unix_time()),
                     proxied: true,
-                }
+                };
+                state
+                    .cashu
+                    .add_pending_invoice(&pending_invoice)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                Ok(pending_invoice)
             }
-            _ => panic!("CLN returned wrong response kind"),
+            Ok(res) => {
+                warn!("Returned Wrong Cln response: {:?}", res);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            Err(err) => {
+                error!("CLN RPC error: {:?}", err);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
         }
     } else {
         let request_mint_response =
@@ -550,7 +564,7 @@ async fn get_user_invoice(
                     warn!("{:?}", err);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
-        PendingInvoice {
+        Ok(PendingInvoice {
             mint: mint.to_string(),
             username,
             description: params.nostr,
@@ -560,20 +574,17 @@ async fn get_user_invoice(
             last_checked: None,
             proxied: false,
             time: unix_time(),
-        }
+        })
     };
 
-    state
-        .cashu
-        .add_pending_invoice(&pending_invoice)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(Json(GetInvoiceResponse {
-        pr: pending_invoice.bolt11.to_string(),
-        success_action: None,
-        routes: vec![],
-    }))
+    match pending_invoice {
+        Ok(invoice) => Ok(Json(GetInvoiceResponse {
+            pr: invoice.bolt11.to_string(),
+            success_action: None,
+            routes: vec![],
+        })),
+        Err(err) => Err(err),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
