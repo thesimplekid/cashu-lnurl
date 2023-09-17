@@ -248,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
                         mint: invoice.mint,
                         username: invoice.username,
                         description: invoice.description,
-                        amount: invoice.amount,
+                        amount,
                         hash: request_mint_response.hash,
                         bolt11: request_mint_response.pr.clone(),
                         last_checked: None,
