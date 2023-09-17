@@ -40,7 +40,7 @@ impl Cashu {
         let cashu_wallet = match wallets.get(mint_url) {
             Some(Some(wallet)) => wallet.clone(),
             _ => {
-                let client = Client::new(mint_url)?;
+                let client = Client::new(mint_url.strip_suffix("/").unwrap_or(mint_url))?;
                 let keys = client.get_keys().await?;
                 let wallet = CashuWallet::new(client, keys);
                 wallets.insert(mint_url.to_string(), Some(wallet.clone()));
