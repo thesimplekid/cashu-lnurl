@@ -489,7 +489,7 @@ async fn get_user_invoice(
             .unwrap()
             .call(cln_rpc::Request::Invoice(InvoiceRequest {
                 amount_msat: AmountOrAny::Amount(CLN_Amount::from_sat(amount.to_sat())),
-                description: params.nostr.clone().unwrap(),
+                description: params.nostr.clone().unwrap_or_default(),
                 label: Uuid::new_v4().to_string(),
                 expiry: None,
                 fallbacks: None,
