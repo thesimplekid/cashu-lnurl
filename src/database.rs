@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use redb::{Database, ReadableTable, TableDefinition};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
@@ -18,7 +18,11 @@ pub struct Db {
 impl Db {
     /// Init Database
     pub async fn new(path: PathBuf) -> Result<Self> {
-        if let Err(err) = fs::create_dir_all(&path) {
+        let directory = path
+            .parent()
+            .ok_or(anyhow!("Path is not set".to_string()))?;
+
+        if let Err(err) = fs::create_dir_all(&directory) {
             warn!("Could not create db path {:?}", err);
         }
 
