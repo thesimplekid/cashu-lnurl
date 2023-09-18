@@ -256,13 +256,18 @@ async fn main() -> anyhow::Result<()> {
 
                     let fee = fee_for_invoice(invoice.amount);
 
-                    // In the case of small invoices that will likly not incur a routing fee
-                    // No fee is taken, This should be configureable.
+                    if let Err(err) = db.add_fee_received(&invoice.hash, fee.to_msat()).await {
+                        warn!("Could not add received fee to DB: {:?}", err);
+                        info!("Fee received: {:?}", fee.to_msat());
+                    }
+
+                    // In the case of small invoices that will likely not incur a routing fee
+                    // No fee is taken, This should be configurable.
                     // However it must be ensured that it is always
                     // > 1 sat as that is the min for cashu tokens
                     // In this small case a max fee of 10 sats is set.
                     // As I would rather the service eat the fees
-                    // TO avoid the poor user experiance of failed payments
+                    // TO avoid the poor user experience of failed payments
                     let max_fee = if fee.eq(&Amount::ZERO) {
                         Amount::from_sat(10)
                     } else {
@@ -331,6 +336,21 @@ async fn main() -> anyhow::Result<()> {
                             {
                                 // let invoice = Amount::from_msat(pay_response.amount_sent_msat.msat());
                                 debug!("Invoice paid: {:?}", pay_response);
+                            }
+                            if let Err(err) = db
+                                .add_fee_paid(
+                                    &pay_response.payment_hash.to_string(),
+                                    (pay_response.amount_sent_msat - pay_response.amount_msat)
+                                        .msat(),
+                                )
+                                .await
+                            {
+                                warn!("Could not add paid fee to DB: {:?}", err);
+
+                                info!(
+                                    "Fee Paid: {:?}",
+                                    pay_response.amount_sent_msat - pay_response.amount_msat
+                                );
                             }
                         }
                         Ok(res) => warn!("Wrong CLN response: {:?}", res),
@@ -423,7 +443,7 @@ async fn invoice_stream(
     .boxed())
 }
 
-/// Caculate fee for invoice
+/// Calculate fee for invoice
 // REVIEW: This is a fairly naive way to handle fees
 // Simply takes 1%
 fn fee_for_invoice(amount: Amount) -> Amount {
@@ -745,5 +765,9 @@ mod tests {
         let amount = Amount::from_sat(100);
 
         assert_eq!(fee_for_invoice(amount), Amount::from_sat(1));
+
+        let amount = Amount::from_msat(123);
+
+        assert_eq!(amount.to_msat(), 123);
     }
 }

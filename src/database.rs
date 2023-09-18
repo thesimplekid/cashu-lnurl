@@ -10,6 +10,10 @@ const USERS: TableDefinition<&str, &str> = TableDefinition::new("mint_info");
 
 const PENDING: TableDefinition<&str, &str> = TableDefinition::new("pending");
 
+const PAID_FEES: TableDefinition<&str, u64> = TableDefinition::new("paid_fees");
+
+const RECEIVED_FEES: TableDefinition<&str, u64> = TableDefinition::new("received_fees");
+
 #[derive(Debug, Clone)]
 pub struct Db {
     db: Arc<Mutex<Database>>,
@@ -32,12 +36,42 @@ impl Db {
         {
             let _ = write_txn.open_table(USERS)?;
             let _ = write_txn.open_table(PENDING)?;
+            let _ = write_txn.open_table(PAID_FEES)?;
+            let _ = write_txn.open_table(RECEIVED_FEES)?;
         }
         write_txn.commit()?;
 
         Ok(Self {
             db: Arc::new(Mutex::new(database)),
         })
+    }
+
+    pub async fn add_fee_paid(&self, payment_hash: &str, fee_msat: u64) -> Result<()> {
+        let db = self.db.lock().await;
+
+        let write_txn = db.begin_write()?;
+        {
+            let mut fee_table = write_txn.open_table(PAID_FEES)?;
+
+            fee_table.insert(payment_hash, fee_msat)?;
+        }
+        write_txn.commit()?;
+
+        Ok(())
+    }
+
+    pub async fn add_fee_received(&self, payment_hash: &str, fee_msat: u64) -> Result<()> {
+        let db = self.db.lock().await;
+
+        let write_txn = db.begin_write()?;
+        {
+            let mut fee_table = write_txn.open_table(RECEIVED_FEES)?;
+
+            fee_table.insert(payment_hash, fee_msat)?;
+        }
+        write_txn.commit()?;
+
+        Ok(())
     }
 
     pub async fn add_user(&self, username: &str, user: &User) -> Result<()> {
