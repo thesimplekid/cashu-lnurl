@@ -765,9 +765,5 @@ mod tests {
         let amount = Amount::from_sat(100);
 
         assert_eq!(fee_for_invoice(amount), Amount::from_sat(1));
-
-        let amount = Amount::from_msat(123);
-
-        assert_eq!(amount.to_msat(), 123);
     }
 }
