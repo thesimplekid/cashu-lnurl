@@ -253,10 +253,23 @@ async fn main() -> anyhow::Result<()> {
                 // If it is request mint from selected mint
                 if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
                     // Fee to account for routing fee
-                    let fee =
-                        Amount::from_sat((invoice.amount.to_sat() as f32 * 0.01).ceil() as u64);
 
-                    let amount = invoice.amount - fee;
+                    let fee = fee_for_invoice(invoice.amount);
+
+                    // In the case of small invoices that will likly not incur a routing fee
+                    // No fee is taken, This should be configureable.
+                    // However it must be ensured that it is always
+                    // > 1 sat as that is the min for cashu tokens
+                    // In this small case a max fee of 10 sats is set.
+                    // As I would rather the service eat the fees
+                    // TO avoid the poor user experiance of failed payments
+                    let max_fee = if fee.eq(&Amount::ZERO) {
+                        Amount::from_sat(10)
+                    } else {
+                        fee
+                    };
+
+                    let amount = invoice.amount - max_fee;
 
                     let request_mint_response =
                         match cashu.request_mint(amount, &invoice.mint).await {
@@ -306,7 +319,7 @@ async fn main() -> anyhow::Result<()> {
                             exemptfee: None,
                             localinvreqid: None,
                             exclude: None,
-                            maxfee: Some(CLN_Amount::from_sat(fee.to_sat())),
+                            maxfee: Some(CLN_Amount::from_sat(max_fee.to_sat())),
                             description: None,
                         }))
                         .await;
@@ -408,6 +421,13 @@ async fn invoice_stream(
         },
     )
     .boxed())
+}
+
+/// Caculate fee for invoice
+// REVIEW: This is a fairly naive way to handle fees
+// Simply takes 1%
+fn fee_for_invoice(amount: Amount) -> Amount {
+    Amount::from_msat((amount.to_msat() as f32 * 0.015).ceil() as u64)
 }
 
 /// Default file path for last pay index tip
@@ -714,5 +734,16 @@ mod tests {
         };
 
         assert_eq!("{\"minSendable\":0,\"maxSendable\":1000000,\"metadata\":\"[[\\\"text/plain\\\",\\\"Hello world\\\"]]\",\"callback\":\"http://example.com/\",\"tag\":\"payRequest\",\"allowsNostr\":true,\"nostrPubkey\":\"9630f464cca6a5147aa8a35f0bcdd3ce485324e732fd39e09233b1d848238f31\"}", serde_json::to_string(&lnurl_response).unwrap());
+    }
+
+    #[test]
+    fn test_fee_calculation() {
+        let amount = Amount::from_sat(1);
+
+        assert_eq!(fee_for_invoice(amount), Amount::ZERO);
+
+        let amount = Amount::from_sat(100);
+
+        assert_eq!(fee_for_invoice(amount), Amount::from_sat(1));
     }
 }
