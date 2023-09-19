@@ -5,6 +5,7 @@ use cashu_sdk::nuts::nut00::wallet::Token;
 use cashu_sdk::nuts::nut03::RequestMintResponse;
 use cashu_sdk::wallet::Wallet as CashuWallet;
 use cashu_sdk::{client::Client, Amount};
+use nostr_sdk::Url;
 use tokio::{
     sync::Mutex,
     time::{sleep, Duration},
@@ -38,7 +39,12 @@ impl Cashu {
     }
 
     /// Get wallet for uri
-    async fn wallet_for_url(&self, mint_url: &str) -> Result<CashuWallet, Error> {
+    async fn wallet_for_url(&self, mint_url: &nostr_sdk::Url) -> Result<CashuWallet, Error> {
+        let mint_url = mint_url
+            .as_str()
+            .strip_suffix("/")
+            .unwrap_or(mint_url.as_str());
+
         let mut wallets = self.mints.lock().await;
         let cashu_wallet = match wallets.get(mint_url) {
             Some(Some(wallet)) => wallet.clone(),
@@ -127,7 +133,7 @@ impl Cashu {
     pub async fn request_mint(
         &self,
         amount: Amount,
-        mint_url: &str,
+        mint_url: &Url,
     ) -> Result<RequestMintResponse, Error> {
         let wallet = self.wallet_for_url(mint_url).await?;
         debug!("Got wallet");

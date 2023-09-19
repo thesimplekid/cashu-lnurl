@@ -1,12 +1,13 @@
 use std::{collections::HashSet, time::SystemTime};
 
 use cashu_sdk::{Amount, Bolt11Invoice};
+use nostr_sdk::Url;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSignUp {
     /// Cashu mint
-    pub mint: String,
+    pub mint: Url,
     /// LN Address username
     pub username: String,
     /// Nostr Relays
@@ -16,7 +17,7 @@ pub struct UserSignUp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     /// Cashu mint
-    pub mint: String,
+    pub mint: Url,
     /// Nostr Pubkey
     pub pubkey: String,
     /// Nostr Relays
@@ -34,7 +35,7 @@ impl User {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingInvoice {
-    pub mint: String,
+    pub mint: Url,
     pub username: String,
     pub description: Option<String>,
     pub time: u64,

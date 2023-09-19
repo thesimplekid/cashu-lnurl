@@ -568,7 +568,7 @@ async fn get_user_invoice(
             Ok(cln_rpc::Response::Invoice(invoice_response)) => {
                 let invoice = Bolt11Invoice::from_str(&invoice_response.bolt11).unwrap();
                 let pending_invoice = PendingInvoice {
-                    mint: mint.to_string(),
+                    mint: mint.clone(),
                     username,
                     description: params.clone().nostr,
                     amount: Amount::from_msat(params.amount),
@@ -605,7 +605,7 @@ async fn get_user_invoice(
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
         Ok(PendingInvoice {
-            mint: mint.to_string(),
+            mint: mint.clone(),
             username,
             description: params.nostr,
             amount: Amount::from_msat(params.amount),
@@ -632,7 +632,7 @@ struct SignupParams {
     username: String,
     pubkey: XOnlyPublicKey,
     proxy: Option<bool>,
-    mint: String,
+    mint: Url,
     relays: Option<HashSet<String>>,
 }
 
