@@ -41,6 +41,7 @@ pub struct Info {
     pub mint: String,
     pub invoice_description: Option<String>,
     pub proxy: bool,
+    pub fee: Option<f32>,
     pub cln_path: Option<String>,
     pub zapper: Option<bool>,
     pub db_path: Option<String>,

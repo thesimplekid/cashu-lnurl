@@ -101,6 +101,10 @@ async fn main() -> anyhow::Result<()> {
 
     let proxy = args.proxy.unwrap_or(config_file_settings.info.proxy);
 
+    let fee = args
+        .fee
+        .unwrap_or(config_file_settings.info.fee.unwrap_or(0.0));
+
     let cln_path = args.cln_path.or(config_file_settings.info.cln_path);
 
     let zapper = Some(
@@ -124,6 +128,7 @@ async fn main() -> anyhow::Result<()> {
             mint,
             invoice_description,
             proxy,
+            fee: Some(fee),
             cln_path,
             min_sendable: Some(min_sendable),
             max_sendable: Some(max_sendable),
@@ -254,7 +259,7 @@ async fn main() -> anyhow::Result<()> {
                 if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
                     // Fee to account for routing fee
 
-                    let fee = fee_for_invoice(invoice.amount);
+                    let fee = fee_for_invoice(invoice.amount, settings.info.fee.unwrap_or(0.0));
 
                     if let Err(err) = db.add_fee_received(&invoice.hash, fee.to_msat()).await {
                         warn!("Could not add received fee to DB: {:?}", err);
@@ -446,8 +451,8 @@ async fn invoice_stream(
 /// Calculate fee for invoice
 // REVIEW: This is a fairly naive way to handle fees
 // Simply takes 1%
-fn fee_for_invoice(amount: Amount) -> Amount {
-    Amount::from_msat((amount.to_msat() as f32 * 0.015).ceil() as u64)
+fn fee_for_invoice(amount: Amount, fee_percent: f32) -> Amount {
+    Amount::from_msat((amount.to_msat() as f32 * fee_percent).ceil() as u64)
 }
 
 /// Default file path for last pay index tip
@@ -760,10 +765,10 @@ mod tests {
     fn test_fee_calculation() {
         let amount = Amount::from_sat(1);
 
-        assert_eq!(fee_for_invoice(amount), Amount::ZERO);
+        assert_eq!(fee_for_invoice(amount, 0.0), Amount::ZERO);
 
         let amount = Amount::from_sat(100);
 
-        assert_eq!(fee_for_invoice(amount), Amount::from_sat(1));
+        assert_eq!(fee_for_invoice(amount, 0.01), Amount::from_sat(1));
     }
 }

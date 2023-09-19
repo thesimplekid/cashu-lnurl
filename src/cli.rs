@@ -31,6 +31,13 @@ pub struct CLIArgs {
         required = false
     )]
     pub proxy: Option<bool>,
+    #[arg(
+        short,
+        long,
+        help = "Fee to collect to account for routing fee percent as a decimal",
+        required = false
+    )]
+    pub fee: Option<f32>,
     #[arg(short, long, help = "cln path", required = false)]
     pub cln_path: Option<String>,
     #[arg(long, help = "Min Sendable in sats", required = false)]
