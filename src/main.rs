@@ -274,7 +274,7 @@ async fn main() -> anyhow::Result<()> {
                         fee
                     };
 
-                    let amount = invoice.amount - max_fee;
+                    let amount = invoice.amount - fee;
 
                     let request_mint_response =
                         match cashu.request_mint(amount, &invoice.mint).await {
