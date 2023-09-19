@@ -135,12 +135,12 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let api_base_address = Url::from_str(&settings.info.url)?;
-    let description = match settings.info.invoice_description {
+    let description = match settings.info.invoice_description.clone() {
         Some(des) => des,
         None => "Hello World".to_string(),
     };
-    let nostr_nsec = settings.info.nostr_nsec;
-    let relays = settings.info.relays;
+    let nostr_nsec = settings.info.nostr_nsec.clone();
+    let relays = settings.info.relays.clone();
 
     debug!("Relays: {:?}", relays);
 
@@ -148,7 +148,7 @@ async fn main() -> anyhow::Result<()> {
         bail!("Must define at least one relay");
     }
 
-    let db_path = match settings.info.db_path {
+    let db_path = match settings.info.db_path.clone() {
         Some(path) => PathBuf::from_str(&path)?,
         None => {
             let data_dir = dirs::data_dir().ok_or(anyhow!("Could not get data dir".to_string()))?;
@@ -166,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    let cashu = Cashu::new(db.clone(), nostr.clone());
+    let cashu = Cashu::new(db.clone(), nostr.clone(), settings.clone());
 
     let mut nostr_clone = nostr.clone();
     let nostr_task = tokio::spawn(async move { nostr_clone.run().await });

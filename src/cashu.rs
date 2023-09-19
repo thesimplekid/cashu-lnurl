@@ -11,6 +11,7 @@ use tokio::{
 };
 use tracing::{debug, warn};
 
+use crate::config::Settings;
 use crate::{
     database::Db,
     error::Error,
@@ -23,14 +24,16 @@ pub struct Cashu {
     mints: Arc<Mutex<HashMap<String, Option<CashuWallet>>>>,
     db: Db,
     nostr: Nostr,
+    settings: Settings,
 }
 
 impl Cashu {
-    pub fn new(db: Db, nostr: Nostr) -> Self {
+    pub fn new(db: Db, nostr: Nostr, settings: Settings) -> Self {
         Self {
             mints: Arc::new(Mutex::new(HashMap::new())),
             db,
             nostr,
+            settings,
         }
     }
 
@@ -82,7 +85,7 @@ impl Cashu {
                                     .send_token(&user.pubkey, token, &user.relays)
                                     .await?;
 
-                                if invoice.proxied {
+                                if invoice.proxied && self.settings.info.zapper.unwrap_or(false) {
                                     if let Some(description) = invoice.description {
                                         if let Err(err) = self
                                             .nostr
