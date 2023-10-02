@@ -104,6 +104,21 @@ impl Db {
         Ok(user)
     }
 
+    pub async fn get_all_users(&self) -> Result<Vec<User>> {
+        let db = self.db.lock().await;
+
+        let read_txn = db.begin_read()?;
+        let users_table = read_txn.open_table(USERS)?;
+
+        let users = users_table
+            .iter()?
+            .flatten()
+            .map(|(_k, v)| serde_json::from_str(&v.value()))
+            .flatten()
+            .collect();
+        Ok(users)
+    }
+
     pub async fn add_pending_invoice(&self, hash: &str, invoice: &PendingInvoice) -> Result<()> {
         let db = self.db.lock().await;
 

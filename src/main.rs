@@ -206,6 +206,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/.well-known/lnurlp/:username", get(get_user_lnurl_struct))
         .route("/lnurlp/:username/invoice", get(get_user_invoice))
         .route("/signup", get(get_sign_up))
+        .route("/list_users", get(get_list_users))
         .with_state(state);
 
     let address = settings.network.address;
@@ -487,6 +488,15 @@ fn write_last_pay_index(file_path: &PathBuf, last_pay_index: u64) -> anyhow::Res
     let mut file = File::create(file_path)?;
     file.write_all(&last_pay_index.to_ne_bytes())?;
     Ok(())
+}
+
+async fn get_list_users(State(state): State<LnurlState>) -> Result<Json<Vec<User>>, StatusCode> {
+    let users = state.db.get_all_users().await.map_err(|err| {
+        warn!("Could not get users: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(users))
 }
 
 async fn get_user_lnurl_struct(
