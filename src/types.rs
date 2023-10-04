@@ -16,6 +16,8 @@ pub struct UserSignUp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
+    /// Username
+    pub username: String,
     /// Cashu mint
     pub mint: Url,
     /// Nostr Pubkey

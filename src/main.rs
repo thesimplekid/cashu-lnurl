@@ -12,7 +12,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use cashu::Cashu;
 use cashu_sdk::{Amount, Bolt11Invoice};
@@ -206,7 +206,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/.well-known/lnurlp/:username", get(get_user_lnurl_struct))
         .route("/lnurlp/:username/invoice", get(get_user_invoice))
         .route("/signup", get(get_sign_up))
+        .route("/add_user", post(post_add_user))
+        .route("/remove_user", delete(delete_user))
         .route("/list_users", get(get_list_users))
+        .route("/reserve", post(post_reserve_user))
+        .route("/block", post(post_block_user))
         .with_state(state);
 
     let address = settings.network.address;
@@ -490,6 +494,7 @@ fn write_last_pay_index(file_path: &PathBuf, last_pay_index: u64) -> anyhow::Res
     Ok(())
 }
 
+/// List all users
 async fn get_list_users(State(state): State<LnurlState>) -> Result<Json<Vec<User>>, StatusCode> {
     let users = state.db.get_all_users().await.map_err(|err| {
         warn!("Could not get users: {:?}", err);
@@ -497,6 +502,75 @@ async fn get_list_users(State(state): State<LnurlState>) -> Result<Json<Vec<User
     })?;
 
     Ok(Json(users))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ReserveParams {
+    username: String,
+    cost: Amount,
+}
+
+async fn post_reserve_user(
+    State(state): State<LnurlState>,
+    Query(params): Query<ReserveParams>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .db
+        .reserve_user(&params.username, &params.cost)
+        .await
+        .map_err(|err| {
+            warn!("Could not reserve user: {:?}", err);
+            StatusCode::OK
+        })?;
+
+    Ok(StatusCode::OK)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BlockParams {
+    username: String,
+}
+
+async fn post_block_user(
+    State(state): State<LnurlState>,
+    Query(params): Query<BlockParams>,
+) -> Result<StatusCode, StatusCode> {
+    state.db.block_user(&params.username).await.map_err(|err| {
+        warn!("Could not reserve user: {:?}", err);
+        StatusCode::OK
+    })?;
+
+    Ok(StatusCode::OK)
+}
+
+/// Add user overwriting is already in db
+async fn post_add_user(
+    State(state): State<LnurlState>,
+    Json(user): Json<User>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .db
+        .add_user(&user.username, &user)
+        .await
+        .map_err(|err| {
+            warn!("Could not add user: {:?}", err);
+            StatusCode::OK
+        })?;
+
+    Ok(StatusCode::OK)
+}
+
+/// Delete User
+async fn delete_user(
+    State(state): State<LnurlState>,
+    Path(username): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    state.db.delete_user(&username).await.map_err(|err| {
+        warn!("Could not delete user: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(StatusCode::OK)
 }
 
 async fn get_user_lnurl_struct(
@@ -668,6 +742,7 @@ async fn get_sign_up(
     let proxy = params.proxy.unwrap_or_default();
 
     let new_user = User {
+        username: params.username.clone(),
         mint: params.mint,
         pubkey: params.pubkey.to_string(),
         relays,

@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use cashu_sdk::Amount;
 use redb::{Database, ReadableTable, TableDefinition};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
@@ -74,6 +75,34 @@ impl Db {
         Ok(())
     }
 
+    pub async fn reserve_user(&self, username: &str, amount: &Amount) -> Result<()> {
+        let db = self.db.lock().await;
+
+        let write_txn = db.begin_write()?;
+        {
+            let mut users_table = write_txn.open_table(USERS)?;
+
+            users_table.insert(username, amount.to_sat().to_string().as_str())?;
+        }
+        write_txn.commit()?;
+
+        Ok(())
+    }
+
+    pub async fn block_user(&self, username: &str) -> Result<()> {
+        let db = self.db.lock().await;
+
+        let write_txn = db.begin_write()?;
+        {
+            let mut users_table = write_txn.open_table(USERS)?;
+
+            users_table.insert(username, "blocked")?;
+        }
+        write_txn.commit()?;
+
+        Ok(())
+    }
+
     pub async fn add_user(&self, username: &str, user: &User) -> Result<()> {
         let db = self.db.lock().await;
 
@@ -117,6 +146,20 @@ impl Db {
             .flatten()
             .collect();
         Ok(users)
+    }
+
+    pub async fn delete_user(&self, username: &str) -> Result<()> {
+        let db = self.db.lock().await;
+
+        let write_txn = db.begin_write()?;
+        {
+            let mut users_table = write_txn.open_table(USERS)?;
+
+            users_table.remove(username)?;
+        }
+        write_txn.commit()?;
+
+        Ok(())
     }
 
     pub async fn add_pending_invoice(&self, hash: &str, invoice: &PendingInvoice) -> Result<()> {

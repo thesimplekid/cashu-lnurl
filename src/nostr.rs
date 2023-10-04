@@ -136,6 +136,7 @@ impl Nostr {
                                                     debug!("User relays: {:?}", relays);
 
                                                     let updated_user = User {
+                                                        username: user.username,
                                                         mint: user_info.mint,
                                                         pubkey: user.pubkey,
                                                         proxy: user.proxy,
@@ -175,6 +176,7 @@ impl Nostr {
 
                                                 debug!("User relays: {:?}", relays);
                                                 let new_user = User {
+                                                    username: user_info.username.clone(),
                                                     mint: user_info.mint,
                                                     pubkey: event.pubkey.to_string(),
                                                     // TODO: Need to change nostr to allow this be configured
