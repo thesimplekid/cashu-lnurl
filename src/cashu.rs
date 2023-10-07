@@ -17,7 +17,7 @@ use crate::{
     database::Db,
     error::Error,
     nostr::Nostr,
-    types::{unix_time, PendingInvoice},
+    types::{unix_time, PendingInvoice, UserKind},
 };
 
 #[derive(Debug, Clone)]
@@ -85,7 +85,7 @@ impl Cashu {
                             // DM token to nostr npub
                             let user = cashu.db.get_user(&invoice.username).await?;
 
-                            if let Some(user) = user {
+                            if let Some(UserKind::User(user)) = user {
                                 cashu
                                     .nostr
                                     .send_token(&user.pubkey, token, &user.relays)

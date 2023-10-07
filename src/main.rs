@@ -1,11 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -30,7 +29,7 @@ use nostr_sdk::secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
-use types::{as_msat, unix_time, PendingInvoice, User};
+use types::{as_msat, unix_time, PendingInvoice, PendingUser, User, UserKind};
 use url::Url;
 use uuid::Uuid;
 
@@ -120,6 +119,44 @@ async fn main() -> anyhow::Result<()> {
 
     let port = args.port.unwrap_or(config_file_settings.network.port);
 
+    let two_char_cost: Amount = args.two_char_price.map(|m| Amount::from_sat(m)).unwrap_or(
+        config_file_settings
+            .info
+            .two_char_cost
+            .map(|a| a)
+            .unwrap_or(Amount::from_sat(0)),
+    );
+
+    let three_char_cost: Amount = args
+        .three_char_price
+        .map(|m| Amount::from_sat(m))
+        .unwrap_or(
+            config_file_settings
+                .info
+                .three_char_cost
+                .map(|a| a)
+                .unwrap_or(Amount::from_sat(0)),
+        );
+
+    let four_char_cost: Amount = args.four_char_price.map(|m| Amount::from_sat(m)).unwrap_or(
+        config_file_settings
+            .info
+            .four_char_cost
+            .map(|a| a)
+            .unwrap_or(Amount::from_sat(0)),
+    );
+
+    let other_char_cost: Amount = args
+        .other_char_price
+        .map(|m| Amount::from_sat(m))
+        .unwrap_or(
+            config_file_settings
+                .info
+                .other_char_cost
+                .map(|a| a)
+                .unwrap_or(Amount::from_sat(0)),
+        );
+
     let settings = Settings {
         info: Info {
             url,
@@ -135,6 +172,10 @@ async fn main() -> anyhow::Result<()> {
             zapper,
             db_path,
             pay_index_path,
+            two_char_cost: Some(two_char_cost),
+            three_char_cost: Some(three_char_cost),
+            four_char_cost: Some(three_char_cost),
+            other_char_cost: Some(other_char_cost),
         },
         network: Network { port, address },
     };
@@ -189,6 +230,15 @@ async fn main() -> anyhow::Result<()> {
     let cashu_clone = cashu.clone();
     let cln_client_clone = cln_client.clone();
 
+    let pending_users = Arc::new(Mutex::new(
+        db_clone
+            .get_pending_users()
+            .await?
+            .into_iter()
+            .map(|u| (u.user.username.clone(), u))
+            .collect(),
+    ));
+
     let state = LnurlState {
         api_base_address,
         min_sendable,
@@ -199,13 +249,18 @@ async fn main() -> anyhow::Result<()> {
         cashu,
         db,
         cln_client,
-        nostr,
+        _nostr: nostr,
+        pending_users: pending_users.clone(),
+        two_char_cost,
+        three_char_cost,
+        four_char_cost,
+        other_char_cost,
     };
 
     let lnurl_service = Router::new()
         .route("/.well-known/lnurlp/:username", get(get_user_lnurl_struct))
         .route("/lnurlp/:username/invoice", get(get_user_invoice))
-        .route("/signup", get(get_sign_up))
+        .route("/signup", post(post_sign_up))
         .route("/add_user", post(post_add_user))
         .route("/remove_user", delete(delete_user))
         .route("/list_users", get(get_list_users))
@@ -232,6 +287,7 @@ async fn main() -> anyhow::Result<()> {
             .cln_path
             .clone()
             .expect("CLN RPC socket path required");
+        let pending_users_clone = pending_users.clone();
 
         let wait_invoice_task = tokio::spawn(async move {
             let pay_index_path = match settings.info.pay_index_path {
@@ -259,9 +315,28 @@ async fn main() -> anyhow::Result<()> {
             let cln_client = cln_client_clone;
 
             while let Some((hash, _invoice)) = invoices.next().await {
+                // Check if invoice is for a pending user
+                let mut pending = pending_users.lock().await;
+                if let Some(pending_user) = pending.get(&hash) {
+                    if let Err(err) = db
+                        .add_user(
+                            &pending_user.user.username,
+                            &UserKind::User(pending_user.user.clone()),
+                        )
+                        .await
+                    {
+                        warn!(
+                            "Could not move pending user to user {}: {:?}",
+                            pending_user.user.username, err
+                        );
+                    }
+
+                    pending.remove(&hash);
+                }
                 // Check if invoice is in db and proxied
                 // If it is request mint from selected mint
-                if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
+                else if let Ok(Some(invoice)) = db.get_pending_invoice(&hash).await {
+                    drop(pending);
                     // Fee to account for routing fee
 
                     let fee = fee_for_invoice(invoice.amount, settings.info.fee.unwrap_or(0.0));
@@ -370,6 +445,14 @@ async fn main() -> anyhow::Result<()> {
             }
         });
 
+        let remove_expired_pending_users_task = tokio::spawn(async move {
+            let mut pending_users = pending_users_clone.lock().await;
+
+            let current_time = unix_time();
+
+            pending_users.retain(|_k, v| v.expire.lt(&current_time));
+        });
+
         tokio::select! {
             _ = nostr_task => {
                 warn!("Nostr task ended");
@@ -382,7 +465,9 @@ async fn main() -> anyhow::Result<()> {
             }
             _ = wait_invoice_task => {
                 warn!("Wait invoice task ended");
-
+            }
+            _ = remove_expired_pending_users_task => {
+                warn!("Remove expired users task ended")
             }
         }
     } else {
@@ -516,7 +601,7 @@ async fn post_reserve_user(
 ) -> Result<StatusCode, StatusCode> {
     state
         .db
-        .reserve_user(&params.username, &params.cost)
+        .add_user(&params.username, &UserKind::Reserved(params.cost))
         .await
         .map_err(|err| {
             warn!("Could not reserve user: {:?}", err);
@@ -535,10 +620,14 @@ async fn post_block_user(
     State(state): State<LnurlState>,
     Query(params): Query<BlockParams>,
 ) -> Result<StatusCode, StatusCode> {
-    state.db.block_user(&params.username).await.map_err(|err| {
-        warn!("Could not reserve user: {:?}", err);
-        StatusCode::OK
-    })?;
+    state
+        .db
+        .add_user(&params.username, &UserKind::Blocked)
+        .await
+        .map_err(|err| {
+            warn!("Could not reserve user: {:?}", err);
+            StatusCode::OK
+        })?;
 
     Ok(StatusCode::OK)
 }
@@ -550,7 +639,7 @@ async fn post_add_user(
 ) -> Result<StatusCode, StatusCode> {
     state
         .db
-        .add_user(&user.username, &user)
+        .add_user(&user.username, &UserKind::User(user.clone()))
         .await
         .map_err(|err| {
             warn!("Could not add user: {:?}", err);
@@ -622,8 +711,8 @@ async fn get_user_invoice(
     let db = state.db;
 
     let user = match db.get_user(&username).await {
-        Ok(Some(user)) => user,
-        Ok(None) => return Err(StatusCode::NOT_FOUND),
+        Ok(Some(UserKind::User(user))) => user,
+        Ok(_) => return Err(StatusCode::NOT_FOUND),
         Err(err) => {
             warn!("{:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -725,45 +814,151 @@ struct SignupParams {
     relays: Option<HashSet<String>>,
 }
 
-async fn get_sign_up(
-    Query(params): Query<SignupParams>,
-    State(state): State<LnurlState>,
-) -> Result<StatusCode, StatusCode> {
-    if let Ok(Some(_)) = state.db.get_user(&params.username).await {
-        return Ok(StatusCode::CONFLICT);
-    }
-
-    let relays = if let Some(relays) = params.relays {
-        relays
-    } else {
-        HashSet::new()
-    };
-
-    let proxy = params.proxy.unwrap_or_default();
-
-    let new_user = User {
-        username: params.username.clone(),
-        mint: params.mint,
-        pubkey: params.pubkey.to_string(),
-        relays,
-        proxy,
-    };
-
-    state
-        .db
-        .add_user(&params.username, &new_user)
+async fn get_invoice(
+    client: Arc<Mutex<Option<ClnRpc>>>,
+    amount: Amount,
+    description: String,
+) -> Result<Bolt11Invoice, StatusCode> {
+    let cln_response = client
+        .lock()
         .await
-        .unwrap();
+        .as_mut()
+        .unwrap()
+        .call(cln_rpc::Request::Invoice(InvoiceRequest {
+            amount_msat: AmountOrAny::Amount(CLN_Amount::from_sat(amount.to_sat())),
+            description,
+            label: Uuid::new_v4().to_string(),
+            expiry: None,
+            fallbacks: None,
+            preimage: None,
+            cltv: None,
+            deschashonly: Some(true),
+        }))
+        .await;
 
-    let nostr = state.nostr.clone();
+    match cln_response {
+        Ok(cln_rpc::Response::Invoice(invoice_response)) => {
+            Ok(Bolt11Invoice::from_str(&invoice_response.bolt11)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?)
+        }
+        Ok(res) => {
+            warn!("Returned Wrong Cln response: {:?}", res);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+        Err(err) => {
+            error!("CLN RPC error: {:?}", err);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
 
-    let _ = thread::spawn(move || {
-        let _ = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(nostr.send_sign_up_message(&params.username, &new_user));
-    });
+async fn post_sign_up(
+    State(state): State<LnurlState>,
+    Json(params): Json<SignupParams>,
+) -> Result<Json<String>, StatusCode> {
+    match state.db.get_user(&params.username).await.map_err(|err| {
+        error!("Could not get user: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })? {
+        Some(UserKind::User(_user)) => Err(StatusCode::CONFLICT),
+        Some(UserKind::Pending(_user)) => Err(StatusCode::CONFLICT),
+        Some(UserKind::Blocked) => Err(StatusCode::NOT_ACCEPTABLE),
+        Some(UserKind::Reserved(amount)) => {
+            let client = state.cln_client.clone();
 
-    Ok(StatusCode::OK)
+            let invoice =
+                get_invoice(client, amount, format!("Payment for {}", params.username)).await?;
+
+            let user = User {
+                username: params.username.clone(),
+                mint: params.mint,
+                pubkey: params.pubkey.to_string(),
+                relays: params.relays.unwrap_or_default(),
+                proxy: params.proxy.unwrap_or_default(),
+            };
+
+            let pending_user = PendingUser {
+                user,
+                pr: invoice.clone(),
+                last_checked: unix_time(),
+                expire: unix_time() + 900,
+            };
+
+            let mut pending_users = state.pending_users.lock().await;
+            pending_users.insert(invoice.payment_hash().to_string(), pending_user.clone());
+
+            let pending_user = UserKind::Pending(pending_user);
+            state
+                .db
+                .add_user(&params.username, &pending_user)
+                .await
+                .unwrap();
+
+            Ok(Json(invoice.to_string()))
+        }
+        None => {
+            let relays = params.relays.unwrap_or_default();
+            let proxy = params.proxy.unwrap_or_default();
+
+            let user = User {
+                username: params.username.clone(),
+                mint: params.mint,
+                pubkey: params.pubkey.to_string(),
+                relays,
+                proxy,
+            };
+
+            let amount = if params.username.len().le(&2) {
+                state.two_char_cost
+            } else if params.username.len().le(&3) {
+                state.three_char_cost
+            } else if params.username.len().le(&4) {
+                state.four_char_cost
+            } else {
+                state.other_char_cost
+            };
+
+            let user = if amount.gt(&Amount::ZERO) {
+                let client = state.cln_client.clone();
+
+                let pr = get_invoice(client, amount, format!("{}", params.username)).await?;
+                let pending_user = PendingUser {
+                    user: user.clone(),
+                    pr: pr.clone(),
+                    last_checked: unix_time(),
+                    expire: unix_time() + 900,
+                };
+
+                let mut pending_users = state.pending_users.lock().await;
+                pending_users.insert(pr.payment_hash().to_string(), pending_user.clone());
+
+                UserKind::Pending(pending_user)
+            } else {
+                UserKind::User(user)
+            };
+
+            state.db.add_user(&params.username, &user).await.unwrap();
+
+            /*
+                        let nostr = state.nostr.clone();
+
+                        let _ = thread::spawn(move || {
+                            let _ = tokio::runtime::Runtime::new()
+                                .unwrap()
+                                .block_on(nostr.send_sign_up_message(&params.username, &user));
+                        });
+            */
+
+            match user {
+                UserKind::User(_) => Ok(Json("Ok".to_string())),
+                UserKind::Pending(user) => Ok(Json(user.pr.to_string())),
+                _ => {
+                    warn!("Unexpected user type");
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -800,7 +995,12 @@ struct LnurlState {
     cashu: Cashu,
     cln_client: Arc<Mutex<Option<ClnRpc>>>,
     db: Db,
-    nostr: Nostr,
+    _nostr: Nostr,
+    pending_users: Arc<Mutex<HashMap<String, PendingUser>>>,
+    two_char_cost: Amount,
+    three_char_cost: Amount,
+    four_char_cost: Amount,
+    other_char_cost: Amount,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -1,11 +1,10 @@
 use anyhow::{anyhow, Result};
-use cashu_sdk::Amount;
 use redb::{Database, ReadableTable, TableDefinition};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
-use crate::types::{PendingInvoice, User};
+use crate::types::{PendingInvoice, PendingUser, User, UserKind};
 
 const USERS: TableDefinition<&str, &str> = TableDefinition::new("mint_info");
 
@@ -75,35 +74,7 @@ impl Db {
         Ok(())
     }
 
-    pub async fn reserve_user(&self, username: &str, amount: &Amount) -> Result<()> {
-        let db = self.db.lock().await;
-
-        let write_txn = db.begin_write()?;
-        {
-            let mut users_table = write_txn.open_table(USERS)?;
-
-            users_table.insert(username, amount.to_sat().to_string().as_str())?;
-        }
-        write_txn.commit()?;
-
-        Ok(())
-    }
-
-    pub async fn block_user(&self, username: &str) -> Result<()> {
-        let db = self.db.lock().await;
-
-        let write_txn = db.begin_write()?;
-        {
-            let mut users_table = write_txn.open_table(USERS)?;
-
-            users_table.insert(username, "blocked")?;
-        }
-        write_txn.commit()?;
-
-        Ok(())
-    }
-
-    pub async fn add_user(&self, username: &str, user: &User) -> Result<()> {
+    pub async fn add_user(&self, username: &str, user: &UserKind) -> Result<()> {
         let db = self.db.lock().await;
 
         let write_txn = db.begin_write()?;
@@ -119,7 +90,7 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_user(&self, username: &str) -> Result<Option<User>> {
+    pub async fn get_user(&self, username: &str) -> Result<Option<UserKind>> {
         let db = self.db.lock().await;
 
         let read_txn = db.begin_read()?;
@@ -144,6 +115,23 @@ impl Db {
             .flatten()
             .map(|(_k, v)| serde_json::from_str(&v.value()))
             .flatten()
+            .collect();
+        Ok(users)
+    }
+
+    pub async fn get_pending_users(&self) -> Result<Vec<PendingUser>> {
+        let db = self.db.lock().await;
+
+        let read_txn = db.begin_read()?;
+        let users_table = read_txn.open_table(USERS)?;
+
+        let users = users_table
+            .iter()?
+            .flatten()
+            .flat_map(|(_k, v)| match serde_json::from_str(v.value()) {
+                Ok(UserKind::Pending(pending_user)) => Some(pending_user),
+                _ => None,
+            })
             .collect();
         Ok(users)
     }

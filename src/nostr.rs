@@ -11,7 +11,7 @@ use tracing::{debug, error, warn};
 use tungstenite::Message as WsMessage;
 
 use crate::database::Db;
-use crate::types::{User, UserSignUp};
+use crate::types::{User, UserKind, UserSignUp};
 
 const SIGNUP_KIND: u64 = 20420;
 
@@ -127,7 +127,7 @@ impl Nostr {
                                     {
                                         // Check if user exists
                                         match self.db.get_user(&user_info.username).await? {
-                                            Some(user) => {
+                                            Some(UserKind::User(user)) => {
                                                 if user.pubkey.eq(&event.pubkey.to_string()) {
                                                     let relays =
                                                         Self::get_user_relays(client, &user.pubkey)
@@ -146,7 +146,7 @@ impl Nostr {
                                                     self.db
                                                         .add_user(
                                                             &user_info.username,
-                                                            &updated_user,
+                                                            &UserKind::User(updated_user.clone()),
                                                         )
                                                         .await?;
 
@@ -167,7 +167,7 @@ impl Nostr {
                                                         .await?;
                                                 }
                                             }
-                                            None => {
+                                            _ => {
                                                 let relays = Self::get_user_relays(
                                                     client,
                                                     &event.pubkey.to_string(),
@@ -185,7 +185,10 @@ impl Nostr {
                                                 };
 
                                                 self.db
-                                                    .add_user(&user_info.username, &new_user)
+                                                    .add_user(
+                                                        &user_info.username,
+                                                        &UserKind::User(new_user.clone()),
+                                                    )
                                                     .await?;
 
                                                 client
@@ -220,7 +223,8 @@ impl Nostr {
         )
     }
 
-    pub async fn send_sign_up_message(&self, username: &str, user: &User) -> anyhow::Result<()> {
+    // TODO:
+    pub async fn _send_sign_up_message(&self, username: &str, user: &User) -> anyhow::Result<()> {
         let mut client_guard = self.client.lock().await;
         if let Some(client) = client_guard.as_mut() {
             client

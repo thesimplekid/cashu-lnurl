@@ -28,11 +28,12 @@ pub struct User {
     pub proxy: bool,
 }
 
-impl User {
-    /// Get transaction as json string
-    pub fn as_json(&self) -> String {
-        serde_json::json!(self).to_string()
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingUser {
+    pub user: User,
+    pub pr: Bolt11Invoice,
+    pub last_checked: u64,
+    pub expire: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +76,21 @@ pub fn unix_time() -> u64 {
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|x| x.as_secs())
         .unwrap_or(0)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UserKind {
+    Reserved(Amount),
+    Blocked,
+    User(User),
+    Pending(PendingUser),
+}
+
+impl UserKind {
+    /// Get transaction as json string
+    pub fn as_json(&self) -> String {
+        serde_json::json!(self).to_string()
+    }
 }
 
 pub mod as_msat {

@@ -52,4 +52,12 @@ pub struct CLIArgs {
     pub address: Option<String>,
     #[arg(short, long, help = "Network port to bind", required = false)]
     pub port: Option<u16>,
+    #[arg(long, help = "Price for two char or less username", required = false)]
+    pub two_char_price: Option<u64>,
+    #[arg(long, help = "Price for three char username", required = false)]
+    pub three_char_price: Option<u64>,
+    #[arg(long, help = "Price for 4 char username", required = false)]
+    pub four_char_price: Option<u64>,
+    #[arg(long, help = "Price for 5+ char username", required = false)]
+    pub other_char_price: Option<u64>,
 }

@@ -48,6 +48,10 @@ pub struct Info {
     pub pay_index_path: Option<PathBuf>,
     pub min_sendable: Option<Amount>,
     pub max_sendable: Option<Amount>,
+    pub two_char_cost: Option<Amount>,
+    pub three_char_cost: Option<Amount>,
+    pub four_char_cost: Option<Amount>,
+    pub other_char_cost: Option<Amount>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
