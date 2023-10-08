@@ -28,6 +28,7 @@ use futures::{Stream, StreamExt};
 use nostr_sdk::secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use types::{as_msat, unix_time, PendingInvoice, PendingUser, User, UserKind};
 use url::Url;
@@ -446,11 +447,16 @@ async fn main() -> anyhow::Result<()> {
         });
 
         let remove_expired_pending_users_task = tokio::spawn(async move {
-            let mut pending_users = pending_users_clone.lock().await;
+            loop {
+                let mut pending_users = pending_users_clone.lock().await;
 
-            let current_time = unix_time();
+                let current_time = unix_time();
 
-            pending_users.retain(|_k, v| v.expire.lt(&current_time));
+                pending_users.retain(|_k, v| v.expire.lt(&current_time));
+                drop(pending_users);
+
+                sleep(Duration::from_secs(15)).await;
+            }
         });
 
         tokio::select! {
