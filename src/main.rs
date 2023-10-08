@@ -282,7 +282,9 @@ async fn main() -> anyhow::Result<()> {
     // When an invoice paid check db if invoice exists request mint and pay and mint
     // DM tokens to user
 
-    if settings.info.proxy {
+    if settings.info.proxy
+        | ((two_char_cost + three_char_cost + four_char_cost + other_char_cost).gt(&Amount::ZERO))
+    {
         let rpc_socket = settings
             .info
             .cln_path
@@ -718,7 +720,10 @@ async fn get_user_invoice(
 
     let user = match db.get_user(&username).await {
         Ok(Some(UserKind::User(user))) => user,
-        Ok(_) => return Err(StatusCode::NOT_FOUND),
+        Ok(_) => {
+            debug!("User {} is pending, invoice has not been paid.", username);
+            return Err(StatusCode::NOT_FOUND);
+        }
         Err(err) => {
             warn!("{:?}", err);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
