@@ -236,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
             .get_pending_users()
             .await?
             .into_iter()
-            .map(|u| (u.user.username.clone(), u))
+            .map(|u| (u.pr.payment_hash().to_string(), u))
             .collect(),
     ));
 
@@ -319,8 +319,12 @@ async fn main() -> anyhow::Result<()> {
 
             while let Some((hash, _invoice)) = invoices.next().await {
                 // Check if invoice is for a pending user
+
+                debug!("Invoice paid: {:?}", hash);
                 let mut pending = pending_users.lock().await;
+                debug!("Pening users: {:?}", pending);
                 if let Some(pending_user) = pending.get(&hash) {
+                    debug!("Invoice for pending user paid: {:?}", pending_user);
                     if let Err(err) = db
                         .add_user(
                             &pending_user.user.username,
@@ -454,7 +458,13 @@ async fn main() -> anyhow::Result<()> {
 
                 let current_time = unix_time();
 
-                pending_users.retain(|_k, v| v.expire.lt(&current_time));
+                let pending_users_count = pending_users.len();
+
+                pending_users.retain(|_k, v| v.expire.gt(&current_time));
+                debug!(
+                    "Removed {} expired pending users.",
+                    pending_users_count - pending_users.len()
+                );
                 drop(pending_users);
 
                 sleep(Duration::from_secs(15)).await;
