@@ -125,15 +125,12 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or(Amount::from_sat(0)),
     );
 
-    let three_char_cost: Amount = args
-        .three_char_price
-        .map(Amount::from_sat)
-        .unwrap_or(
-            config_file_settings
-                .info
-                .three_char_cost
-                .unwrap_or(Amount::from_sat(0)),
-        );
+    let three_char_cost: Amount = args.three_char_price.map(Amount::from_sat).unwrap_or(
+        config_file_settings
+            .info
+            .three_char_cost
+            .unwrap_or(Amount::from_sat(0)),
+    );
 
     let four_char_cost: Amount = args.four_char_price.map(Amount::from_sat).unwrap_or(
         config_file_settings
@@ -142,15 +139,12 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or(Amount::from_sat(0)),
     );
 
-    let other_char_cost: Amount = args
-        .other_char_price
-        .map(Amount::from_sat)
-        .unwrap_or(
-            config_file_settings
-                .info
-                .other_char_cost
-                .unwrap_or(Amount::from_sat(0)),
-        );
+    let other_char_cost: Amount = args.other_char_price.map(Amount::from_sat).unwrap_or(
+        config_file_settings
+            .info
+            .other_char_cost
+            .unwrap_or(Amount::from_sat(0)),
+    );
 
     let settings = Settings {
         info: Info {
