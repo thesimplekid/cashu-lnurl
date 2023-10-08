@@ -9,7 +9,7 @@ use cashu_sdk::{Amount, Bolt11Invoice};
 use cln_rpc::model::requests::InvoiceRequest;
 use cln_rpc::primitives::{Amount as CLN_Amount, AmountOrAny};
 use cln_rpc::ClnRpc;
-use nostr_sdk::secp256k1::XOnlyPublicKey;
+use nostr_sdk::Keys;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
@@ -325,13 +325,34 @@ async fn get_invoice(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SignupParams {
     username: String,
-    pubkey: XOnlyPublicKey,
+    #[serde(with = "nostr_keys")]
+    pubkey: Keys,
     proxy: Option<bool>,
     mint: Url,
     relays: Option<HashSet<String>>,
+}
+
+pub mod nostr_keys {
+    use nostr_sdk::{prelude::FromPkStr, Keys};
+    use serde::Deserialize;
+
+    pub fn serialize<S>(keys: &Keys, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&keys.public_key().to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Keys, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let key_string = String::deserialize(deserializer)?;
+        Keys::from_pk_str(&key_string).map_err(serde::de::Error::custom)
+    }
 }
 
 pub(crate) async fn post_sign_up(
@@ -354,7 +375,7 @@ pub(crate) async fn post_sign_up(
             let user = User {
                 username: params.username.clone(),
                 mint: params.mint,
-                pubkey: params.pubkey.to_string(),
+                pubkey: params.pubkey.public_key().to_string(),
                 relays: params.relays.unwrap_or_default(),
                 proxy: params.proxy.unwrap_or_default(),
             };
@@ -385,7 +406,7 @@ pub(crate) async fn post_sign_up(
             let user = User {
                 username: params.username.clone(),
                 mint: params.mint,
-                pubkey: params.pubkey.to_string(),
+                pubkey: params.pubkey.public_key().to_string(),
                 relays,
                 proxy,
             };
