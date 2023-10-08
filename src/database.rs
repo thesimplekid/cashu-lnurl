@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use redb::{Database, ReadableTable, TableDefinition};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{debug, warn};
+use tracing::warn;
 
 use crate::types::{PendingInvoice, PendingUser, User, UserKind};
 
