@@ -10,10 +10,10 @@ use cln_rpc::model::requests::InvoiceRequest;
 use cln_rpc::primitives::{Amount as CLN_Amount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use nostr_sdk::Keys;
+use nostr_sdk::Url;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
-use url::Url;
 use uuid::Uuid;
 
 use crate::types::{as_msat, unix_time, PendingInvoice, PendingUser, User, UserKind};

@@ -23,11 +23,11 @@ use cln_rpc::ClnRpc;
 use database::Db;
 use dirs::data_dir;
 use futures::{Stream, StreamExt};
+use nostr_sdk::Url;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 use types::{unix_time, PendingInvoice, PendingUser, UserKind};
-use url::Url;
 
 use crate::cli::CLIArgs;
 use crate::config::{Info, Network, Settings};
