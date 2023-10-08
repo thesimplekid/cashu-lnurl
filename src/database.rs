@@ -26,7 +26,7 @@ impl Db {
             .parent()
             .ok_or(anyhow!("Path is not set".to_string()))?;
 
-        if let Err(err) = fs::create_dir_all(&directory) {
+        if let Err(err) = fs::create_dir_all(directory) {
             warn!("Could not create db path {:?}", err);
         }
 
@@ -111,8 +111,7 @@ impl Db {
         let users = users_table
             .iter()?
             .flatten()
-            .map(|(_k, v)| serde_json::from_str(&v.value()))
-            .flatten()
+            .flat_map(|(_k, v)| serde_json::from_str(v.value()))
             .collect();
         Ok(users)
     }

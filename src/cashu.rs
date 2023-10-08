@@ -42,7 +42,7 @@ impl Cashu {
     async fn wallet_for_url(&self, mint_url: &nostr_sdk::Url) -> Result<CashuWallet, Error> {
         let mint_url = mint_url
             .as_str()
-            .strip_suffix("/")
+            .strip_suffix('/')
             .unwrap_or(mint_url.as_str());
 
         let mut wallets = self.mints.lock().await;

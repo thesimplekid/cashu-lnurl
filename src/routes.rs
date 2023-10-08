@@ -403,7 +403,7 @@ pub(crate) async fn post_sign_up(
             let user = if amount.gt(&Amount::ZERO) {
                 let client = state.cln_client.clone();
 
-                let pr = get_invoice(client, amount, format!("{}", params.username)).await?;
+                let pr = get_invoice(client, amount, params.username.to_string()).await?;
                 let pending_user = PendingUser {
                     user: user.clone(),
                     pr: pr.clone(),

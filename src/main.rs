@@ -81,19 +81,17 @@ async fn main() -> anyhow::Result<()> {
         args.relays.into_iter().collect()
     };
 
-    let max_sendable: Amount = args.max_sendable.map(|m| Amount::from_sat(m)).unwrap_or(
+    let max_sendable: Amount = args.max_sendable.map(Amount::from_sat).unwrap_or(
         config_file_settings
             .info
             .max_sendable
-            .map(|a| a)
             .unwrap_or(Amount::from_sat(1000000)),
     );
 
-    let min_sendable: Amount = args.max_sendable.map(|m| Amount::from_sat(m)).unwrap_or(
+    let min_sendable: Amount = args.max_sendable.map(Amount::from_sat).unwrap_or(
         config_file_settings
             .info
             .min_sendable
-            .map(|a| a)
             .unwrap_or(Amount::from_sat(1)),
     );
 
@@ -120,41 +118,37 @@ async fn main() -> anyhow::Result<()> {
 
     let port = args.port.unwrap_or(config_file_settings.network.port);
 
-    let two_char_cost: Amount = args.two_char_price.map(|m| Amount::from_sat(m)).unwrap_or(
+    let two_char_cost: Amount = args.two_char_price.map(Amount::from_sat).unwrap_or(
         config_file_settings
             .info
             .two_char_cost
-            .map(|a| a)
             .unwrap_or(Amount::from_sat(0)),
     );
 
     let three_char_cost: Amount = args
         .three_char_price
-        .map(|m| Amount::from_sat(m))
+        .map(Amount::from_sat)
         .unwrap_or(
             config_file_settings
                 .info
                 .three_char_cost
-                .map(|a| a)
                 .unwrap_or(Amount::from_sat(0)),
         );
 
-    let four_char_cost: Amount = args.four_char_price.map(|m| Amount::from_sat(m)).unwrap_or(
+    let four_char_cost: Amount = args.four_char_price.map(Amount::from_sat).unwrap_or(
         config_file_settings
             .info
             .four_char_cost
-            .map(|a| a)
             .unwrap_or(Amount::from_sat(0)),
     );
 
     let other_char_cost: Amount = args
         .other_char_price
-        .map(|m| Amount::from_sat(m))
+        .map(Amount::from_sat)
         .unwrap_or(
             config_file_settings
                 .info
                 .other_char_cost
-                .map(|a| a)
                 .unwrap_or(Amount::from_sat(0)),
         );
 
