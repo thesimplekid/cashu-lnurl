@@ -85,8 +85,6 @@ impl Db {
         }
         write_txn.commit()?;
 
-        debug!("User: {username}, {:?} added", user);
-
         Ok(())
     }
 

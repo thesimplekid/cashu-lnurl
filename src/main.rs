@@ -320,9 +320,7 @@ async fn main() -> anyhow::Result<()> {
             while let Some((hash, _invoice)) = invoices.next().await {
                 // Check if invoice is for a pending user
 
-                debug!("Invoice paid: {:?}", hash);
                 let mut pending = pending_users.lock().await;
-                debug!("Pening users: {:?}", pending);
                 if let Some(pending_user) = pending.get(&hash) {
                     debug!("Invoice for pending user paid: {:?}", pending_user);
                     if let Err(err) = db
