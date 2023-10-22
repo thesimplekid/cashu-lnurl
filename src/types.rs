@@ -1,4 +1,5 @@
-use std::{collections::HashSet, time::SystemTime};
+use std::collections::HashSet;
+use std::time::SystemTime;
 
 use cashu_sdk::{Amount, Bolt11Invoice};
 use nostr_sdk::Url;

@@ -1,24 +1,22 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
+use cashu_sdk::client::Client;
 use cashu_sdk::nuts::nut00::wallet::Token;
 use cashu_sdk::nuts::nut03::RequestMintResponse;
 use cashu_sdk::wallet::Wallet as CashuWallet;
-use cashu_sdk::{client::Client, Amount};
+use cashu_sdk::Amount;
 use nostr_sdk::Url;
-use tokio::{
-    sync::Mutex,
-    time::{sleep, Duration},
-};
+use tokio::sync::Mutex;
+use tokio::time::{sleep, Duration};
 use tracing::{debug, warn};
 
 use crate::config::Settings;
-use crate::{
-    database::Db,
-    error::Error,
-    nostr::Nostr,
-    types::{unix_time, PendingInvoice, UserKind},
-};
+use crate::database::Db;
+use crate::error::Error;
+use crate::nostr::Nostr;
+use crate::types::{unix_time, PendingInvoice, UserKind};
 
 #[derive(Debug, Clone)]
 pub struct Cashu {

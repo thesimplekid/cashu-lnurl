@@ -7,17 +7,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use axum::routing::{delete, get, post};
 use axum::Router;
 use cashu::Cashu;
 use cashu_sdk::Amount;
 use clap::Parser;
-use cln_rpc::model::{
-    requests::{PayRequest, WaitanyinvoiceRequest},
-    responses::WaitanyinvoiceResponse,
-};
+use cln_rpc::model::requests::{PayRequest, WaitanyinvoiceRequest};
+use cln_rpc::model::responses::WaitanyinvoiceResponse;
 use cln_rpc::primitives::Amount as CLN_Amount;
 use cln_rpc::ClnRpc;
 use database::Db;
@@ -412,7 +409,8 @@ async fn main() -> anyhow::Result<()> {
                             if let Ok(pay_response) =
                                 serde_json::to_string(&pay_response.payment_preimage)
                             {
-                                // let invoice = Amount::from_msat(pay_response.amount_sent_msat.msat());
+                                // let invoice =
+                                // Amount::from_msat(pay_response.amount_sent_msat.msat());
                                 debug!("Invoice paid: {:?}", pay_response);
                             }
                             if let Err(err) = db
@@ -501,7 +499,8 @@ async fn invoice_stream(
     Ok(futures::stream::unfold(
         (cln_client, pay_index_path, last_pay_index),
         |(mut cln_client, pay_index_path, mut last_pay_idx)| async move {
-            // We loop here since some invoices aren't zaps, in which case we wait for the next one and don't yield
+            // We loop here since some invoices aren't zaps, in which case we wait for the
+            // next one and don't yield
             loop {
                 // info!("Waiting for index: {last_pay_idx:?}");
                 let invoice_res = cln_client

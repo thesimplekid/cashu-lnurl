@@ -1,6 +1,7 @@
 use std::collections::HashSet;
+use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
-use std::{str::FromStr, sync::Arc};
 
 use anyhow::{bail, Result};
 use cashu_sdk::nuts::nut00::wallet::Token;
@@ -179,7 +180,8 @@ impl Nostr {
                                                     username: user_info.username.clone(),
                                                     mint: user_info.mint,
                                                     pubkey: event.pubkey.to_string(),
-                                                    // TODO: Need to change nostr to allow this be configured
+                                                    // TODO: Need to change nostr to allow this be
+                                                    // configured
                                                     proxy: true,
                                                     relays,
                                                 };

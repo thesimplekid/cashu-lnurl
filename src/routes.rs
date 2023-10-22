@@ -9,8 +9,7 @@ use cashu_sdk::{Amount, Bolt11Invoice};
 use cln_rpc::model::requests::InvoiceRequest;
 use cln_rpc::primitives::{Amount as CLN_Amount, AmountOrAny};
 use cln_rpc::ClnRpc;
-use nostr_sdk::Keys;
-use nostr_sdk::Url;
+use nostr_sdk::{Keys, Url};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
@@ -336,7 +335,8 @@ pub struct SignupParams {
 }
 
 pub mod nostr_keys {
-    use nostr_sdk::{prelude::FromPkStr, Keys};
+    use nostr_sdk::prelude::FromPkStr;
+    use nostr_sdk::Keys;
     use serde::Deserialize;
 
     pub fn serialize<S>(keys: &Keys, serializer: S) -> Result<S::Ok, S::Error>
